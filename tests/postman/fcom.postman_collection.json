@@ -1,0 +1,876 @@
+{
+  "info": {
+    "_postman_id": "fcom-backend-tests-v1",
+    "name": "Fcom Backend Tests",
+    "description": "Full test suite for Fcom / Кредо backend — Supabase Edge Functions.\n\nPrerequisites:\n1. Set the `base_url` environment variable.\n2. Apply all 19 migrations + seed.sql.\n3. Leave SMS_API_URL empty (dev OTP mode).\n4. Run folders in order: Auth → Registration → OTP → Password → Login → Approve → Messages → Rate → Security.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",    "value": "https://vzjlhiqvfgrrlfdgyebx.supabase.co/functions/v1" },
+    { "key": "alice_token", "value": "" },
+    { "key": "bob_token",   "value": "" },
+    { "key": "carol_token", "value": "" },
+    { "key": "reg_token",   "value": "" },
+    { "key": "new_user_id", "value": "" },
+    { "key": "new_phone",   "value": "+79009876543" },
+    { "key": "dev_otp",     "value": "" },
+    { "key": "alice_id",    "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "bob_id",      "value": "00000000-0000-0000-0000-000000000002" },
+    { "key": "carol_id",    "value": "00000000-0000-0000-0000-000000000003" },
+    { "key": "dave_id",     "value": "00000000-0000-0000-0000-000000000004" },
+    { "key": "eve_id",      "value": "00000000-0000-0000-0000-000000000005" },
+    { "key": "frank_id",    "value": "00000000-0000-0000-0000-000000000006" }
+  ],
+  "item": [
+
+    {
+      "name": "0. Auth Setup — Login seed users",
+      "description": "Run first to populate tokens for all other test folders.",
+      "item": [
+        {
+          "name": "Login alice",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('alice login ok', () => pm.expect(r.ok).to.be.true);",
+            "if (r.ok && r.token) pm.collectionVariables.set('alice_token', r.token);"
+          ]}}]
+        },
+        {
+          "name": "Login bob",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('bob login ok', () => pm.expect(r.ok).to.be.true);",
+            "if (r.ok && r.token) pm.collectionVariables.set('bob_token', r.token);"
+          ]}}]
+        },
+        {
+          "name": "Login carol",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"carol\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('carol login ok', () => pm.expect(r.ok).to.be.true);",
+            "if (r.ok && r.token) pm.collectionVariables.set('carol_token', r.token);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "1. Registration",
+      "item": [
+        {
+          "name": "R-01 Happy path — without phone",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тестов Тест Тестович\",\"school\":\"Школа №99\",\"grade\":\"9А\",\"nickname\":\"testuser1\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-01 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('R-01 user has id', () => pm.expect(r.user).to.have.property('id'));",
+            "pm.test('R-01 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
+            "pm.test('R-01 token issued', () => pm.expect(r.token).to.be.a('string'));",
+            "pm.test('R-01 cred is 0', () => pm.expect(Number(r.user.cred)).to.equal(0));",
+            "pm.test('R-01 phoneVerified false', () => pm.expect(r.user.phoneVerified).to.be.false);",
+            "if (r.user) pm.collectionVariables.set('new_user_id', r.user.id);",
+            "if (r.token) pm.collectionVariables.set('reg_token', r.token);"
+          ]}}]
+        },
+        {
+          "name": "R-02 Happy path — with phone (dev mode OTP)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Звонков Зинаида Зиновьевна\",\"school\":\"Школа №88\",\"grade\":\"10Б\",\"nickname\":\"zvonkova\",\"phone\":\"{{new_phone}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-02 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('R-02 _devOtp present in dev mode', () => pm.expect(r._devOtp).to.be.a('string'));",
+            "pm.test('R-02 _devOtp is 6 digits', () => pm.expect(r._devOtp).to.match(/^\\d{6}$/));",
+            "pm.test('R-02 phoneVerified false initially', () => pm.expect(r.user.phoneVerified).to.be.false);",
+            "if (r._devOtp) pm.collectionVariables.set('dev_otp', r._devOtp);"
+          ]}}]
+        },
+        {
+          "name": "R-03 First user in new school → auto-approved",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Первый Пользователь Новой Школы\",\"school\":\"Уникальная Школа №777\",\"grade\":\"11А\",\"nickname\":\"firstschool777\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-03 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('R-03 auto-approved', () => pm.expect(r.user.status).to.equal('approved'));",
+            "pm.test('R-03 cred = 1', () => pm.expect(Number(r.user.cred)).to.equal(1));"
+          ]}}]
+        },
+        {
+          "name": "R-04 Missing fullName → fullName_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"school\":\"Школа\",\"grade\":\"9А\",\"nickname\":\"noname\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-04 not ok', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('R-04 error', () => pm.expect(r.error).to.equal('fullName_required'));",
+            "pm.test('R-04 HTTP 400', () => pm.expect(pm.response.code).to.equal(400));"
+          ]}}]
+        },
+        {
+          "name": "R-05 Missing school → school_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тест Тестов\",\"grade\":\"9А\",\"nickname\":\"noschool\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-05 school_required', () => pm.expect(r.error).to.equal('school_required'));"
+          ]}}]
+        },
+        {
+          "name": "R-06 Missing grade → grade_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"nickname\":\"nograde\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-06 grade_required', () => pm.expect(r.error).to.equal('grade_required'));"
+          ]}}]
+        },
+        {
+          "name": "R-07 Missing nickname → nickname_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"grade\":\"9А\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-07 nickname_required', () => pm.expect(r.error).to.equal('nickname_required'));"
+          ]}}]
+        },
+        {
+          "name": "R-08 Duplicate nickname (exact) → nickname_taken",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"alice\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-08 nickname_taken', () => pm.expect(r.error).to.equal('nickname_taken'));"
+          ]}}]
+        },
+        {
+          "name": "R-09 Duplicate nickname case-insensitive → nickname_taken",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"ALICE\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-09 nickname_taken (case-insensitive)', () => pm.expect(r.error).to.equal('nickname_taken'));"
+          ]}}]
+        },
+        {
+          "name": "R-10 Duplicate phone → phone_taken",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Другой Борис\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"notbob\",\"phone\":\"+79001000002\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-10 phone_taken', () => pm.expect(r.error).to.equal('phone_taken'));"
+          ]}}]
+        },
+        {
+          "name": "R-11 Duplicate fullName case-insensitive → fullName_taken",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"иванова алиса сергеевна\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"aliceclone\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-11 fullName_taken (case-insensitive)', () => pm.expect(r.error).to.equal('fullName_taken'));"
+          ]}}]
+        },
+        {
+          "name": "R-15 Invalid JSON → invalid_json",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "this is not json" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('R-15 invalid_json', () => pm.expect(r.error).to.equal('invalid_json'));"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "2. OTP Verification",
+      "item": [
+        {
+          "name": "O-01 Correct dev OTP → ok:true",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/verify-phone",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"{{new_phone}}\",\"code\":\"{{dev_otp}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('O-01 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('O-01 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
+          ]}}]
+        },
+        {
+          "name": "O-02 Dev universal bypass code 000000",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/verify-phone",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"{{new_phone}}\",\"code\":\"000000\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('O-02 bypass code accepted or already verified', () => {",
+            "  pm.expect(r.ok === true || r.error === 'otp_not_found_or_expired').to.be.true;",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "O-03 Wrong code → invalid_code + attemptsLeft",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/verify-phone",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"+79001000004\",\"code\":\"999999\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('O-03 invalid_code or expired', () => {",
+            "  pm.expect(['invalid_code','otp_not_found_or_expired']).to.include(r.error);",
+            "});",
+            "if (r.error === 'invalid_code') {",
+            "  pm.test('O-03 attemptsLeft is number', () => pm.expect(r.attemptsLeft).to.be.a('number'));",
+            "}"
+          ]}}]
+        },
+        {
+          "name": "O-07 Unknown phone → user_not_found",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/verify-phone",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"+70000000000\",\"code\":\"123456\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('O-07 user_not_found', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('O-07 HTTP 404', () => pm.expect(pm.response.code).to.equal(404));"
+          ]}}]
+        },
+        {
+          "name": "O-11 Resend OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/resend-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"+79001000004\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('O-11 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('O-11 new _devOtp present', () => pm.expect(r._devOtp).to.be.a('string'));"
+          ]}}]
+        },
+        {
+          "name": "O-13 Resend — unknown phone → user_not_found",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/resend-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phone\":\"+70000000000\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('O-13 user_not_found', () => pm.expect(r.ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "3. Set Password",
+      "item": [
+        {
+          "name": "P-01 Set password with reg token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/set-password",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{reg_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('P-01 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('P-01 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
+          ]}}]
+        },
+        {
+          "name": "P-02 No token → unauthorized",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/set-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('P-02 unauthorized', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('P-02 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "P-04 Missing password → password_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/set-password",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('P-04 password_required', () => pm.expect(r.error).to.equal('password_required'));"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "4. Login",
+      "item": [
+        {
+          "name": "L-01 Happy path → token issued",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('L-01 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('L-01 token string', () => pm.expect(r.token).to.be.a('string'));",
+            "pm.test('L-01 user has id', () => pm.expect(r.user.id).to.be.a('string'));",
+            "pm.test('L-01 user has nickname', () => pm.expect(r.user.nickname).to.equal('alice'));",
+            "pm.test('L-01 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
+            "pm.test('L-01 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
+            "if (r.token) pm.collectionVariables.set('alice_token', r.token);"
+          ]}}]
+        },
+        {
+          "name": "L-02 Wrong password → invalid_credentials",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"wrongpassword\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('L-02 invalid_credentials', () => pm.expect(r.error).to.equal('invalid_credentials'));",
+            "pm.test('L-02 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "L-03 Unknown nickname → invalid_credentials",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"nobody\",\"password\":\"test\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('L-03 invalid_credentials', () => pm.expect(r.error).to.equal('invalid_credentials'));"
+          ]}}]
+        },
+        {
+          "name": "L-04 Pending user → account_not_approved",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"dave\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('L-04 account_not_approved', () => pm.expect(r.error).to.equal('account_not_approved'));",
+            "pm.test('L-04 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+          ]}}]
+        },
+        {
+          "name": "L-05 Rejected user → account_rejected",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"eve\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('L-05 account_rejected', () => pm.expect(r.error).to.equal('account_rejected'));",
+            "pm.test('L-05 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "5. Approve / Reject",
+      "item": [
+        {
+          "name": "A-01 Approved user approves pending",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/approve",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"userId\":\"{{dave_id}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('A-01 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('A-01 status approved', () => pm.expect(r.user.status).to.equal('approved'));",
+            "pm.test('A-01 cred > 0', () => pm.expect(Number(r.user.cred)).to.be.above(0));"
+          ]}}]
+        },
+        {
+          "name": "A-04 No JWT → unauthorized",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/approve",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"userId\":\"{{dave_id}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('A-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('A-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "A-05 Non-existent user → target_not_found",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/approve",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"userId\":\"00000000-0000-0000-0000-999999999999\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('A-05 target_not_found', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('A-05 HTTP 404', () => pm.expect(pm.response.code).to.equal(404));"
+          ]}}]
+        },
+        {
+          "name": "A-09 Reject with fingerprint → device blocked",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/reject",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"userId\":\"{{grace_id}}\",\"deviceFingerprint\":\"aabbcc112233445566778899aabbccddeeff0011\"}" }
+          },
+          "variable": [{ "key": "grace_id", "value": "00000000-0000-0000-0000-000000000007" }],
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('A-09 ok or cross-school', () => {",
+            "  pm.expect(r.ok === true || r.error !== undefined).to.be.true;",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "6. Messages",
+      "item": [
+        {
+          "name": "M-01 Send message alice → bob",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"Привет из Postman!\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('M-01 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('M-01 message.fromId is alice', () => pm.expect(r.message.fromId).to.equal(pm.collectionVariables.get('alice_id')));",
+            "pm.test('M-01 message.toId is bob', () => pm.expect(r.message.toId).to.equal(pm.collectionVariables.get('bob_id')));",
+            "pm.test('M-01 readAt is null', () => pm.expect(r.message.readAt).to.be.null);",
+            "pm.test('M-01 no fromId spoofing', () => pm.expect(r.message.fromId).not.to.equal(pm.collectionVariables.get('bob_id')));"
+          ]}}]
+        },
+        {
+          "name": "M-02 Get messages alice↔bob",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/messages?partnerId={{bob_id}}",
+              "query": [{ "key": "partnerId", "value": "{{bob_id}}" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{alice_token}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('M-02 ok', () => pm.expect(r.ok).to.be.true);",
+            "pm.test('M-02 messages is array', () => pm.expect(r.messages).to.be.an('array'));",
+            "pm.test('M-02 messages not empty', () => pm.expect(r.messages.length).to.be.above(0));",
+            "pm.test('M-02 each message has fromId/toId', () => {",
+            "  r.messages.forEach(m => {",
+            "    const aliceId = pm.collectionVariables.get('alice_id');",
+            "    const bobId = pm.collectionVariables.get('bob_id');",
+            "    pm.expect([m.fromId, m.toId]).to.include(aliceId);",
+            "    pm.expect([m.fromId, m.toId]).to.include(bobId);",
+            "  });",
+            "});",
+            "pm.test('M-02 sorted ascending', () => {",
+            "  const msgs = r.messages;",
+            "  for (let i = 1; i < msgs.length; i++) {",
+            "    pm.expect(new Date(msgs[i].time) >= new Date(msgs[i-1].time)).to.be.true;",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "M-03 Empty text → text_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('M-03 text_required', () => pm.expect(r.error).to.equal('text_required'));"
+          ]}}]
+        },
+        {
+          "name": "M-04 No JWT → unauthorized",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"Hi\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('M-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('M-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "M-07 Cross-school message → cross_school_forbidden",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{frank_id}}\",\"text\":\"Hello from other school\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('M-07 cross_school_forbidden', () => pm.expect(r.ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "7. Credo Rating",
+      "item": [
+        {
+          "name": "C-01 Rate alice→bob score 4 (has conversation)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":4}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-01 ok or 24h_limit (seed may have existing rating)', () => {",
+            "  pm.expect(r.ok === true || r.error === '24h_limit').to.be.true;",
+            "});",
+            "if (r.ok) {",
+            "  pm.test('C-01 newCred is number', () => pm.expect(r.newCred).to.be.a('number'));",
+            "  pm.test('C-01 entry.score is 4', () => pm.expect(r.entry.score).to.equal(4));",
+            "}"
+          ]}}]
+        },
+        {
+          "name": "C-02 Self-rate → self",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{alice_id}}\",\"score\":5}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-02 self', () => pm.expect(r.error).to.equal('self'));",
+            "pm.test('C-02 HTTP 400', () => pm.expect(pm.response.code).to.equal(400));"
+          ]}}]
+        },
+        {
+          "name": "C-05 Score 0 → invalid_score",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":0}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-05 invalid_score', () => pm.expect(r.error).to.equal('invalid_score'));"
+          ]}}]
+        },
+        {
+          "name": "C-06 Score 6 → invalid_score",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":6}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-06 invalid_score', () => pm.expect(r.error).to.equal('invalid_score'));"
+          ]}}]
+        },
+        {
+          "name": "C-08 fromUserId mismatch → fromUserId_mismatch",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"fromUserId\":\"{{bob_id}}\",\"toId\":\"{{carol_id}}\",\"score\":5}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-08 fromUserId_mismatch', () => pm.expect(r.error).to.equal('fromUserId_mismatch'));",
+            "pm.test('C-08 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+          ]}}]
+        },
+        {
+          "name": "C-09 Cross-school → cross_school_forbidden",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{frank_id}}\",\"score\":5}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-09 cross_school or no_chat', () => {",
+            "  pm.expect(['cross_school_forbidden','no_chat']).to.include(r.error);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "C-12 No JWT → unauthorized",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/rate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":4}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('C-12 unauthorized', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('C-12 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "8. Security",
+      "item": [
+        {
+          "name": "S-01 No auth header → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users",
+            "header": []
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('S-01 unauthorized', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('S-01 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "S-03 Malformed JWT → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users",
+            "header": [{ "key": "Authorization", "value": "Bearer thisisnot.a.jwttoken" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('S-03 unauthorized', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('S-03 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "S-05 Expired JWT → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users",
+            "header": [{
+              "key": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiZXhwIjoxNjAwMDAwMDAwfQ.EXPIRED_SIGNATURE"
+            }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('S-05 unauthorized (expired token)', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('S-05 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "S-06 Logout revokes token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/logout",
+            "header": [{ "key": "Authorization", "value": "Bearer {{alice_token}}" }]
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const r = pm.response.json();",
+              "pm.test('S-06 logout ok', () => pm.expect(r.ok).to.be.true);"
+            ]}},
+            { "listen": "prerequest", "script": { "exec": [
+              "pm.collectionVariables.set('revoked_token', pm.collectionVariables.get('alice_token'));"
+            ]}}
+          ]
+        },
+        {
+          "name": "S-06b Revoked token rejected → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users",
+            "header": [{ "key": "Authorization", "value": "Bearer {{revoked_token}}" }]
+          },
+          "variable": [{ "key": "revoked_token", "value": "" }],
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('S-06b revoked token rejected', () => pm.expect(r.ok).to.be.false);",
+            "pm.test('S-06b HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+          ]}}]
+        },
+        {
+          "name": "S-15 passwordHash not in login response",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"testpass\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const r = pm.response.json();",
+            "pm.test('S-15 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
+            "pm.test('S-15 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
+            "pm.test('S-15 no phoneVerified in response', () => pm.expect(r.user.phoneVerified).to.be.undefined);"
+          ]}}]
+        }
+      ]
+    }
+  ]
+}

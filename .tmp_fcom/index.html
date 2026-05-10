@@ -1,0 +1,1799 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fcom - The Digital Universe</title>
+  <style>
+    :root {
+      --bg: #050505;
+      --bg-secondary: #0b0b0f;
+      --surface: rgba(255, 255, 255, 0.06);
+      --surface-strong: rgba(255, 255, 255, 0.1);
+      --surface-soft: rgba(255, 255, 255, 0.03);
+      --text: rgba(255, 255, 255, 0.96);
+      --muted: rgba(255, 255, 255, 0.62);
+      --border: rgba(255, 255, 255, 0.12);
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --cyan: #22d3ee;
+      --danger: #ff4d7a;
+      --shadow-xl: 0 40px 140px rgba(0, 0, 0, 0.55);
+      --shadow-glow: 0 0 70px rgba(59, 130, 246, 0.24);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 18px;
+      --container: 1340px;
+      --transition-slow: 900ms cubic-bezier(0.2, 0.8, 0.1, 1);
+      --transition-med: 520ms cubic-bezier(0.2, 0.8, 0.1, 1);
+      --transition-fast: 280ms ease;
+      --font-display: "Clash Display", "SF Pro Display", "Inter Tight", "Segoe UI", sans-serif;
+      --font-body: "Satoshi", "General Sans", "Inter Tight", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.13), transparent 24%),
+        radial-gradient(circle at 80% 15%, rgba(139, 92, 246, 0.14), transparent 26%),
+        radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.12), transparent 30%),
+        linear-gradient(160deg, #040404 0%, #050507 50%, #06060b 100%);
+      color: var(--text);
+      font-family: var(--font-body);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -3;
+    }
+
+    body::before {
+      opacity: 0.2;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 80px 80px;
+      mask-image: radial-gradient(circle at center, black 45%, transparent 88%);
+    }
+
+    body::after {
+      opacity: 0.11;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+
+    button,
+    a {
+      color: inherit;
+    }
+
+    .app-shell {
+      position: relative;
+      min-height: 100vh;
+      isolation: isolate;
+    }
+
+    .ambient-light,
+    .ambient-light::before,
+    .ambient-light::after {
+      position: fixed;
+      border-radius: 999px;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: -2;
+      content: "";
+    }
+
+    .ambient-light {
+      inset: auto;
+      width: 34vw;
+      height: 34vw;
+      top: -8vw;
+      left: -6vw;
+      background: rgba(34, 211, 238, 0.12);
+      animation: driftA 22s ease-in-out infinite alternate;
+    }
+
+    .ambient-light::before {
+      width: 30vw;
+      height: 30vw;
+      top: 18vh;
+      right: -4vw;
+      background: rgba(139, 92, 246, 0.16);
+      animation: driftB 18s ease-in-out infinite alternate;
+    }
+
+    .ambient-light::after {
+      width: 26vw;
+      height: 26vw;
+      bottom: -8vw;
+      left: 38vw;
+      background: rgba(59, 130, 246, 0.15);
+      animation: driftC 20s ease-in-out infinite alternate;
+    }
+
+    .particle-canvas,
+    .cursor-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .particle-canvas {
+      z-index: -1;
+      opacity: 0.8;
+    }
+
+    .cursor-glow {
+      z-index: 18;
+      background:
+        radial-gradient(circle 220px at var(--mx, 50%) var(--my, 50%), rgba(59, 130, 246, 0.14), transparent 60%),
+        radial-gradient(circle 120px at calc(var(--mx, 50%) + 40px) calc(var(--my, 50%) - 20px), rgba(34, 211, 238, 0.08), transparent 65%);
+      mix-blend-mode: screen;
+      transition: opacity var(--transition-fast);
+    }
+
+    .loader {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(59, 130, 246, 0.14), transparent 34%),
+        linear-gradient(180deg, rgba(6, 6, 8, 0.88), rgba(5, 5, 5, 0.98));
+      z-index: 30;
+      transition: opacity 700ms ease, visibility 700ms ease;
+      backdrop-filter: blur(20px);
+    }
+
+    .loader.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loader-stack {
+      width: min(420px, 84vw);
+      display: grid;
+      gap: 24px;
+      text-align: center;
+    }
+
+    .loader-kicker,
+    .eyebrow,
+    .caps {
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .loader-mark {
+      font-family: var(--font-display);
+      font-size: clamp(52px, 10vw, 104px);
+      letter-spacing: -0.05em;
+      line-height: 0.95;
+      font-weight: 700;
+    }
+
+    .loader-line {
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .loader-line::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-60%);
+      background: linear-gradient(90deg, transparent, var(--blue), var(--cyan), transparent);
+      animation: loading 1.8s ease-in-out infinite;
+    }
+
+    .topbar {
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), var(--container));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 14px 16px;
+      background: rgba(10, 10, 14, 0.56);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 22px;
+      backdrop-filter: blur(20px) saturate(160%);
+      box-shadow: var(--shadow-xl);
+      z-index: 15;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.34), rgba(139, 92, 246, 0.18)),
+        rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 30px rgba(59, 130, 246, 0.2);
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.06em;
+    }
+
+    .brand-copy strong {
+      display: block;
+      font-size: 16px;
+      letter-spacing: -0.03em;
+    }
+
+    .brand-copy span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .nav-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 auto;
+    }
+
+    .nav-tab,
+    .ghost-button,
+    .primary-button,
+    .page-pill,
+    .stat-chip {
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+    }
+
+    .nav-tab {
+      padding: 11px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.72);
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .nav-tab.is-active,
+    .nav-tab:hover {
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ghost-button,
+    .primary-button {
+      padding: 12px 18px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      will-change: transform;
+    }
+
+    .ghost-button {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .primary-button {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.34), rgba(139, 92, 246, 0.42));
+      border-color: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 14px 40px rgba(59, 130, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .primary-button::after,
+    .ghost-button::after {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: inherit;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+
+    .primary-button:hover::after,
+    .ghost-button:hover::after {
+      animation: sheen 1.2s ease;
+      opacity: 1;
+    }
+
+    .viewport {
+      position: relative;
+      min-height: 100vh;
+      overflow: visible;
+    }
+
+    .page-stack {
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .page {
+      min-height: 100svh;
+      width: 100%;
+      position: relative;
+      overflow: visible;
+      padding: 120px 18px 56px;
+      scroll-margin-top: 108px;
+    }
+
+    .page-inner {
+      width: min(100%, var(--container));
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+      align-content: start;
+      padding-bottom: 48px;
+    }
+
+    .hero-grid,
+    .split-grid,
+    .triple-grid,
+    .quad-grid,
+    .dual-panel {
+      display: grid;
+      gap: 24px;
+    }
+
+    .hero-grid {
+      grid-template-columns: 1.1fr 0.9fr;
+      align-items: center;
+      min-height: calc(100vh - 190px);
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      width: fit-content;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(20px);
+    }
+
+    .hero-copy h1,
+    .section-title {
+      margin: 0;
+      font-family: var(--font-display);
+      line-height: 0.92;
+      letter-spacing: -0.06em;
+    }
+
+    .hero-copy h1 {
+      font-size: clamp(68px, 12vw, 156px);
+      max-width: 9ch;
+      text-wrap: pretty;
+    }
+
+    .hero-copy p,
+    .section-copy,
+    .card-copy,
+    .muted {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 17px;
+      max-width: 62ch;
+    }
+
+    .hero-copy p {
+      font-size: clamp(18px, 2vw, 22px);
+      margin: 24px 0 0;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 30px;
+    }
+
+    .micro-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .stat-chip {
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+      display: grid;
+      gap: 4px;
+      min-width: 126px;
+    }
+
+    .stat-chip strong {
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+
+    .stat-chip span {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    .glass,
+    .panel,
+    .feature-card,
+    .window,
+    .metric-card,
+    .community-card,
+    .footer-shell {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(24px) saturate(150%);
+    }
+
+    .hero-stage {
+      position: relative;
+      perspective: 1800px;
+      min-height: 700px;
+    }
+
+    .orb,
+    .mesh,
+    .beam {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .orb {
+      border-radius: 999px;
+      filter: blur(30px);
+      opacity: 0.84;
+      animation: floatOrb 11s ease-in-out infinite alternate;
+    }
+
+    .orb-a {
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.8), transparent 70%);
+      top: 10%;
+      right: 10%;
+    }
+
+    .orb-b {
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.68), transparent 70%);
+      bottom: 10%;
+      left: 2%;
+      animation-delay: -2s;
+    }
+
+    .beam {
+      inset: 8% 22% 18% 18%;
+      background: conic-gradient(from 180deg at 50% 50%, rgba(59, 130, 246, 0.18), transparent 35%, rgba(34, 211, 238, 0.12), transparent 75%, rgba(139, 92, 246, 0.16));
+      filter: blur(44px);
+      opacity: 0.8;
+    }
+
+    .mesh {
+      inset: 18% 14%;
+      border-radius: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        linear-gradient(transparent 0, transparent 95%, rgba(255, 255, 255, 0.05) 100%),
+        linear-gradient(90deg, transparent 0, transparent 95%, rgba(255, 255, 255, 0.05) 100%);
+      background-size: 36px 36px;
+      transform: rotateX(76deg) rotateZ(-16deg);
+      opacity: 0.36;
+      mask-image: radial-gradient(circle at center, black 38%, transparent 88%);
+    }
+
+    .floating-scene {
+      position: relative;
+      width: min(100%, 680px);
+      height: 680px;
+      margin-inline: auto;
+      transform-style: preserve-3d;
+      animation: hoverScene 10s ease-in-out infinite;
+    }
+
+    .window {
+      position: absolute;
+      border-radius: 28px;
+      padding: 20px;
+      background: linear-gradient(180deg, rgba(10, 12, 18, 0.84), rgba(9, 10, 14, 0.55));
+      --base-transform: translate3d(0, 0, 0);
+      --tilt-x: 0deg;
+      --tilt-y: 0deg;
+      --lift-y: 0px;
+      --drift-x: 0px;
+      --drift-y: 0px;
+      --scene-spin: 0deg;
+      transform:
+        var(--base-transform)
+        rotateX(var(--tilt-x))
+        rotateY(var(--tilt-y))
+        rotateZ(var(--scene-spin))
+        translate3d(var(--drift-x), calc(var(--drift-y) + var(--lift-y)), 0);
+      transition: transform 320ms ease, box-shadow 320ms ease, border-color 320ms ease;
+      will-change: transform;
+    }
+
+    .window.main {
+      inset: 10% 10% 14% 10%;
+      --base-transform: translate3d(0, 0, 10px) rotateX(12deg) rotateY(-18deg);
+    }
+
+    .window.side {
+      width: 280px;
+      top: 7%;
+      right: -2%;
+      --base-transform: translate3d(0, 0, 80px) rotateX(8deg) rotateY(-24deg);
+      --scene-spin: -2deg;
+    }
+
+    .window.chat {
+      width: 250px;
+      left: -2%;
+      bottom: 8%;
+      --base-transform: translate3d(0, 0, 60px) rotateX(8deg) rotateY(18deg);
+      --scene-spin: 1.5deg;
+    }
+
+    .window.small {
+      width: 220px;
+      right: 8%;
+      bottom: 4%;
+      --base-transform: translate3d(0, 0, 30px) rotateX(6deg) rotateY(-12deg);
+      --scene-spin: -1deg;
+    }
+
+    .floating-scene .window.main {
+      animation: windowFloatMain 9s ease-in-out infinite;
+    }
+
+    .floating-scene .window.side {
+      animation: windowFloatSide 8s ease-in-out infinite;
+    }
+
+    .floating-scene .window.chat {
+      animation: windowFloatChat 10s ease-in-out infinite;
+    }
+
+    .floating-scene .window.small {
+      animation: windowFloatSmall 7.5s ease-in-out infinite;
+    }
+
+    .window-bar,
+    .feed-row,
+    .list-row,
+    .reaction-row,
+    .footer-links {
+      display: flex;
+      align-items: center;
+    }
+
+    .window-bar {
+      justify-content: space-between;
+      margin-bottom: 18px;
+      gap: 12px;
+    }
+
+    .signal-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .signal-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    .window-headline {
+      font-family: var(--font-display);
+      font-size: 26px;
+      letter-spacing: -0.04em;
+      margin: 0;
+    }
+
+    .dashboard-grid,
+    .feed-stack,
+    .stats-grid,
+    .community-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .dashboard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
+    .panel {
+      padding: 18px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+    }
+
+    .panel.large {
+      grid-column: 1 / -1;
+      min-height: 200px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel-graph,
+    .chart-line {
+      position: absolute;
+      inset: auto 18px 22px;
+      height: 96px;
+      background: linear-gradient(180deg, rgba(59, 130, 246, 0.1), rgba(34, 211, 238, 0.24));
+      clip-path: polygon(0 84%, 12% 70%, 24% 78%, 36% 54%, 48% 62%, 60% 28%, 72% 42%, 84% 20%, 100% 8%, 100% 100%, 0 100%);
+      border-radius: 20px 20px 14px 14px;
+      box-shadow: 0 0 30px rgba(34, 211, 238, 0.22);
+    }
+
+    .panel-graph::after,
+    .chart-line::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
+      animation: sweep 4s linear infinite;
+    }
+
+    .feed-row,
+    .list-row {
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .avatar-cluster,
+    .bubble-stack {
+      display: flex;
+      align-items: center;
+    }
+
+    .avatar-cluster span,
+    .avatar {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(139, 92, 246, 0.28));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-right: -10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .bubble-stack {
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 16px;
+    }
+
+    .bubble {
+      padding: 12px 14px;
+      border-radius: 16px;
+      max-width: 88%;
+      line-height: 1.45;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .bubble.is-accent {
+      align-self: end;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.26), rgba(139, 92, 246, 0.3));
+    }
+
+    .section-header {
+      display: grid;
+      gap: 14px;
+      align-items: start;
+      max-width: 880px;
+    }
+
+    .section-title {
+      font-size: clamp(44px, 8vw, 92px);
+      max-width: 10ch;
+    }
+
+    .split-grid {
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
+    }
+
+    .triple-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .quad-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .dual-panel {
+      grid-template-columns: 1.08fr 0.92fr;
+    }
+
+    .feature-card,
+    .metric-card,
+    .community-card {
+      padding: 24px;
+      border-radius: 24px;
+      position: relative;
+      overflow: hidden;
+      transform-style: preserve-3d;
+      min-height: 260px;
+    }
+
+    .feature-card::before,
+    .metric-card::before,
+    .community-card::before {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: inherit;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 46%);
+      pointer-events: none;
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      margin-bottom: 22px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-family: var(--font-display);
+    }
+
+    .feature-card .glow-line,
+    .metric-card .glow-line,
+    .community-card .glow-line {
+      position: absolute;
+      inset: auto 18px 18px 18px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0), rgba(59, 130, 246, 0.88), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0));
+      filter: blur(0.2px);
+      opacity: 0.85;
+    }
+
+    .feature-card:hover,
+    .metric-card:hover,
+    .community-card:hover,
+    .page-pill:hover,
+    .ghost-button:hover,
+    .primary-button:hover {
+      transform: translateY(-4px);
+    }
+
+    .experience-shell,
+    .creator-shell,
+    .community-shell {
+      display: grid;
+      gap: 24px;
+    }
+
+    .window.feed,
+    .window.analytics,
+    .window.community-preview {
+      position: relative;
+      inset: auto;
+      transform: none;
+      width: 100%;
+      min-height: 100%;
+    }
+
+    .window.analytics .panel.large,
+    .window.community-preview .panel.large {
+      min-height: 180px;
+    }
+
+    .reactions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .reaction-row {
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+    }
+
+    .creator-overview,
+    .community-overview {
+      padding: 28px;
+      border-radius: 28px;
+      min-height: 480px;
+    }
+
+    .stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 22px;
+    }
+
+    .metric-value {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 4vw, 58px);
+      letter-spacing: -0.05em;
+      line-height: 0.95;
+      margin: 14px 0 8px;
+    }
+
+    .page-controls {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: grid;
+      gap: 10px;
+      z-index: 14;
+    }
+
+    .page-pill {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .page-pill.is-active {
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+    }
+
+    .page-label {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      padding: 12px 16px;
+      border-radius: 18px;
+      background: rgba(10, 10, 14, 0.54);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+      z-index: 14;
+    }
+
+    .footer-shell {
+      padding: 28px;
+      border-radius: 28px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .footer-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: end;
+    }
+
+    .footer-top h2 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: clamp(40px, 7vw, 72px);
+      letter-spacing: -0.05em;
+      line-height: 0.94;
+    }
+
+    .footer-links {
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: rgba(255, 255, 255, 0.68);
+      text-decoration: none;
+    }
+
+    .footer-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.7), rgba(139, 92, 246, 0.72), transparent);
+    }
+
+    .is-reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 800ms ease, transform 800ms ease;
+    }
+
+    .is-reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1180px) {
+      .topbar {
+        top: 12px;
+      }
+
+      .topbar,
+      .nav-tabs {
+        flex-wrap: wrap;
+      }
+
+      .page {
+        min-height: auto;
+        overflow: visible;
+        padding-top: 128px;
+        scroll-margin-top: 118px;
+      }
+
+      .page-controls,
+      .page-label {
+        display: none;
+      }
+
+      .hero-grid,
+      .split-grid,
+      .dual-panel,
+      .triple-grid,
+      .quad-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .floating-scene {
+        width: 100%;
+        height: 560px;
+      }
+
+      .window.side,
+      .window.chat,
+      .window.small {
+        width: min(240px, 46vw);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        width: calc(100% - 16px);
+        padding: 12px;
+      }
+
+      .topbar-actions {
+        width: 100%;
+      }
+
+      .topbar-actions a,
+      .cta-row a {
+        flex: 1 1 auto;
+      }
+
+      .hero-copy h1 {
+        font-size: clamp(54px, 18vw, 96px);
+      }
+
+      .floating-scene {
+        height: 440px;
+      }
+
+      .window.main {
+        inset: 16% 2% 8% 2%;
+      }
+
+      .window.side,
+      .window.chat,
+      .window.small {
+        display: none;
+      }
+
+      .section-title,
+      .footer-top h2 {
+        max-width: none;
+      }
+
+      .footer-top {
+        flex-direction: column;
+        align-items: start;
+      }
+    }
+
+    @keyframes loading {
+      0% { transform: translateX(-60%); }
+      50% { transform: translateX(20%); }
+      100% { transform: translateX(120%); }
+    }
+
+    @keyframes sheen {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(120%); }
+    }
+
+    @keyframes driftA {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(10vw, 12vh, 0) scale(1.12); }
+    }
+
+    @keyframes driftB {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(-10vw, 8vh, 0) scale(1.08); }
+    }
+
+    @keyframes driftC {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(-8vw, -10vh, 0) scale(1.16); }
+    }
+
+    @keyframes floatOrb {
+      from { transform: translateY(-10px) scale(1); }
+      to { transform: translateY(14px) scale(1.08); }
+    }
+
+    @keyframes hoverScene {
+      0% { transform: rotateX(0deg) rotateY(0deg); }
+      50% { transform: rotateX(4deg) rotateY(-5deg); }
+      100% { transform: rotateX(-1deg) rotateY(4deg); }
+    }
+
+    @keyframes windowFloatMain {
+      0%, 100% {
+        --drift-y: 0px;
+      }
+      50% {
+        --drift-y: -10px;
+      }
+    }
+
+    @keyframes windowFloatSide {
+      0%, 100% {
+        --drift-y: -2px;
+        --drift-x: 0px;
+      }
+      50% {
+        --drift-y: 12px;
+        --drift-x: 8px;
+      }
+    }
+
+    @keyframes windowFloatChat {
+      0%, 100% {
+        --drift-y: 0px;
+        --drift-x: 0px;
+      }
+      50% {
+        --drift-y: -12px;
+        --drift-x: -8px;
+      }
+    }
+
+    @keyframes windowFloatSmall {
+      0%, 100% {
+        --drift-y: 0px;
+      }
+      50% {
+        --drift-y: 8px;
+      }
+    }
+
+    @keyframes sweep {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(120%); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="ambient-light"></div>
+    <canvas class="particle-canvas" aria-hidden="true"></canvas>
+    <div class="cursor-glow" aria-hidden="true"></div>
+
+    <div class="loader" id="loader">
+      <div class="loader-stack">
+        <div class="loader-kicker">Fcom system boot</div>
+        <div class="loader-mark">FCOM</div>
+        <div class="loader-line"></div>
+        <div class="muted">Syncing identities, spaces, and signals into one premium social layer.</div>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">F</div>
+        <div class="brand-copy">
+          <strong>Fcom</strong>
+          <span>Luxury social operating system</span>
+        </div>
+      </div>
+      <nav class="nav-tabs" aria-label="Pages">
+        <button class="nav-tab is-active" data-page-target="0">Home</button>
+        <button class="nav-tab" data-page-target="1">Experience</button>
+        <button class="nav-tab" data-page-target="2">Messaging</button>
+        <button class="nav-tab" data-page-target="3">Creator OS</button>
+        <button class="nav-tab" data-page-target="4">Communities</button>
+      </nav>
+      <div class="topbar-actions">
+        <a class="ghost-button magnetic" href="#0">Watch preview</a>
+        <a class="primary-button magnetic" href="#0">Reserve handle</a>
+      </div>
+    </header>
+
+    <aside class="page-controls" aria-label="Page switcher">
+      <button class="page-pill is-active" data-page-target="0" aria-label="Home"></button>
+      <button class="page-pill" data-page-target="1" aria-label="Experience"></button>
+      <button class="page-pill" data-page-target="2" aria-label="Messaging"></button>
+      <button class="page-pill" data-page-target="3" aria-label="Creator OS"></button>
+      <button class="page-pill" data-page-target="4" aria-label="Communities"></button>
+    </aside>
+    <div class="page-label" id="pageLabel">01 / Home</div>
+
+    <main class="viewport">
+      <div class="page-stack" id="pageStack">
+        <section class="page" data-page-label="01 / Home">
+          <div class="page-inner">
+            <div class="hero-grid">
+              <div class="hero-copy is-reveal is-visible">
+                <div class="kicker">Responsive prototype / 2026 social system</div>
+                <h1>Your Digital Universe Starts Here</h1>
+                <p>Fcom turns identity, content, communities, and creator income into one cinematic social layer. It feels less like a feed and more like a living operating system for presence.</p>
+                <div class="cta-row">
+                  <a class="primary-button magnetic" href="#0">Registration</a>
+                  <a class="ghost-button magnetic" href="#0">Explore the interface</a>
+                </div>
+                <div class="micro-stats">
+                  <div class="stat-chip">
+                    <strong>5 layers</strong>
+                    <span>Identity, content, chat, spaces, economy</span>
+                  </div>
+                  <div class="stat-chip">
+                    <strong>Realtime</strong>
+                    <span>Shared presence across feed and spaces</span>
+                  </div>
+                  <div class="stat-chip">
+                    <strong>Zero-noise</strong>
+                    <span>AI-ranked relevance over algorithmic clutter</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hero-stage is-reveal is-visible">
+                <div class="beam"></div>
+                <div class="mesh"></div>
+                <div class="orb orb-a"></div>
+                <div class="orb orb-b"></div>
+                <div class="floating-scene">
+                  <div class="window main tilt-card">
+                    <div class="window-bar">
+                      <div class="signal-dots"><span></span><span></span><span></span></div>
+                      <div class="caps">Live orbit / 09:42</div>
+                    </div>
+                    <h2 class="window-headline">Adaptive social dashboard</h2>
+                    <p class="muted">Your circles, signals, creator income, and immersive rooms in one continuous layer.</p>
+                    <div class="dashboard-grid">
+                      <div class="panel">
+                        <div class="caps">Aura feed</div>
+                        <div class="metric-value">+84%</div>
+                        <div class="muted">Context-matched recommendations instead of generic engagement bait.</div>
+                      </div>
+                      <div class="panel">
+                        <div class="caps">Identity depth</div>
+                        <div class="metric-value">12 nodes</div>
+                        <div class="muted">Profiles become living holographic graphs of expertise and taste.</div>
+                      </div>
+                      <div class="panel large">
+                        <div class="caps">Realtime emotional map</div>
+                        <div class="panel-graph"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="window side tilt-card">
+                    <div class="window-bar">
+                      <strong>Signals</strong>
+                      <span class="caps">AI</span>
+                    </div>
+                    <div class="feed-stack">
+                      <div class="feed-row">
+                        <span>Priority creators</span>
+                        <strong>12</strong>
+                      </div>
+                      <div class="feed-row">
+                        <span>Live spaces nearby</span>
+                        <strong>04</strong>
+                      </div>
+                      <div class="feed-row">
+                        <span>New community resonance</span>
+                        <strong>92%</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="window chat tilt-card">
+                    <div class="window-bar">
+                      <strong>Immersive DM</strong>
+                      <span class="caps">Latency 24ms</span>
+                    </div>
+                    <div class="bubble-stack">
+                      <div class="bubble">Your live room just crossed 12K listens. Want to convert highlights into clips?</div>
+                      <div class="bubble is-accent">Yes. Push the best 3 moments to premium followers first.</div>
+                    </div>
+                  </div>
+
+                  <div class="window small tilt-card">
+                    <div class="window-bar">
+                      <strong>Pulse</strong>
+                      <span class="caps">Now</span>
+                    </div>
+                    <div class="avatar-cluster">
+                      <span>AL</span><span>MK</span><span>JS</span><span>RA</span>
+                    </div>
+                    <div class="reactions">
+                      <div class="reaction-row">Live reactions <strong>2.4K</strong></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <section class="section-header is-reveal">
+              <div class="eyebrow">Feature system</div>
+              <h2 class="section-title">Six product surfaces, authored like floating hardware.</h2>
+              <p class="section-copy">Fcom avoids the usual feature-grid deadness. Each capability behaves like an active layer inside a responsive social OS, with depth, light, and motion carrying product meaning.</p>
+            </section>
+
+            <section class="triple-grid">
+              <article class="feature-card tilt-card is-reveal">
+                <div class="feature-icon">AI</div>
+                <h3 class="card-title">AI recommendations</h3>
+                <p class="card-copy">Recommendations read behavior, intent, and social momentum, not just raw scroll velocity.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="feature-card tilt-card is-reveal">
+                <div class="feature-icon">SC</div>
+                <h3 class="card-title">Smart communities</h3>
+                <p class="card-copy">Communities self-organize around energy, craft, and relevance instead of static topic buckets.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="feature-card tilt-card is-reveal">
+                <div class="feature-icon">DM</div>
+                <h3 class="card-title">Immersive messaging</h3>
+                <p class="card-copy">Messages carry presence, clips, audio, and shared context as one fluid conversation surface.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="feature-card tilt-card is-reveal">
+                <div class="feature-icon">LS</div>
+                <h3 class="card-title">Live spaces</h3>
+                <p class="card-copy">Drop into premium rooms with ambient reactions, layered audience controls, and spatial status.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="feature-card tilt-card is-reveal">
+                <div class="feature-icon">CE</div>
+                <h3 class="card-title">Creator economy</h3>
+                <p class="card-copy">Monetization feels native to identity, not bolted onto the edge of the product.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="feature-card tilt-card is-reveal">
+                <div class="feature-icon">HP</div>
+                <h3 class="card-title">Holographic profiles</h3>
+                <p class="card-copy">Profiles become layered digital signatures with badges, work, circles, voice, and memory.</p>
+                <div class="glow-line"></div>
+              </article>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" data-page-label="02 / Experience">
+          <div class="page-inner">
+            <section class="section-header is-reveal is-visible">
+              <div class="eyebrow">Social experience</div>
+              <h2 class="section-title">A feed that feels like command over your digital orbit.</h2>
+              <p class="section-copy">Instead of a flat endless scroll, Fcom stages content in layers: signal feed, live reactions, active rooms, and social presence floating above the primary canvas.</p>
+            </section>
+
+            <section class="dual-panel experience-shell">
+              <div class="window feed tilt-card is-reveal is-visible">
+                <div class="window-bar">
+                  <strong>Future feed</strong>
+                  <span class="caps">Ranked by resonance</span>
+                </div>
+                <div class="feed-stack">
+                  <div class="list-row">
+                    <div>
+                      <strong>Design systems are turning into operating systems.</strong>
+                      <div class="muted">Live now from the Product Futures circle.</div>
+                    </div>
+                    <span class="caps">Trending</span>
+                  </div>
+                  <div class="panel large">
+                    <div class="caps">Featured cinematic clip</div>
+                    <div class="panel-graph"></div>
+                  </div>
+                  <div class="list-row">
+                    <div class="avatar-cluster"><span>AM</span><span>DV</span><span>NU</span></div>
+                    <strong>12.4K live reactions</strong>
+                  </div>
+                  <div class="list-row">
+                    <span>Realtime overlays</span>
+                    <span class="caps">Comments / audio / clips / room joins</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="split-grid">
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Layered UI</div>
+                  <div class="metric-value">03</div>
+                  <p class="card-copy">Core content, active reactions, and ambient presence move independently for real cinematic depth.</p>
+                  <div class="glow-line"></div>
+                </article>
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Realtime mood</div>
+                  <div class="metric-value">97%</div>
+                  <p class="card-copy">Dynamic sentiment pulses help users feel a room before they commit attention to it.</p>
+                  <div class="glow-line"></div>
+                </article>
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Adaptive avatars</div>
+                  <div class="metric-value">Live</div>
+                  <p class="card-copy">Avatars glow, pulse, and condense around live events to create presence without clutter.</p>
+                  <div class="glow-line"></div>
+                </article>
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Signal control</div>
+                  <div class="metric-value">Clean</div>
+                  <p class="card-copy">Mute noise, pin people, boost craft, and narrow the social layer to what actually matters.</p>
+                  <div class="glow-line"></div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" data-page-label="03 / Messaging">
+          <div class="page-inner">
+            <section class="section-header is-reveal is-visible">
+              <div class="eyebrow">Messaging + live spaces</div>
+              <h2 class="section-title">Conversation becomes spatial, visual, and emotionally legible.</h2>
+              <p class="section-copy">Fcom messaging is not a dead list of threads. It behaves like a responsive room system with ambient status, shared media, and space-aware social context.</p>
+            </section>
+
+            <section class="split-grid">
+              <div class="window tilt-card is-reveal is-visible">
+                <div class="window-bar">
+                  <strong>Immersive chat</strong>
+                  <span class="caps">Presence synced</span>
+                </div>
+                <div class="bubble-stack">
+                  <div class="bubble">Launching the new members-only room in 8 minutes. I want the highlight reel pinned from the first second.</div>
+                  <div class="bubble is-accent">Done. Top followers are already inside the pre-room lobby and reactions are warming up.</div>
+                  <div class="bubble">Good. Route first-time joiners into the visual onboarding layer, not the raw conversation.</div>
+                </div>
+                <div class="reactions">
+                  <div class="reaction-row">Voice active 128</div>
+                  <div class="reaction-row">Typing clouds 12</div>
+                  <div class="reaction-row">Shared clips 38</div>
+                </div>
+              </div>
+
+              <div class="window tilt-card is-reveal is-visible">
+                <div class="window-bar">
+                  <strong>Live room stack</strong>
+                  <span class="caps">Spatial roster</span>
+                </div>
+                <div class="feed-stack">
+                  <div class="list-row">
+                    <span>Main stage</span>
+                    <strong>12 speakers</strong>
+                  </div>
+                  <div class="list-row">
+                    <span>Backchannel</span>
+                    <strong>184 co-listening</strong>
+                  </div>
+                  <div class="panel large">
+                    <div class="caps">Ambient participation graph</div>
+                    <div class="chart-line"></div>
+                  </div>
+                  <div class="list-row">
+                    <span>Realtime translation</span>
+                    <strong>On</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" data-page-label="04 / Creator OS">
+          <div class="page-inner">
+            <section class="section-header is-reveal is-visible">
+              <div class="eyebrow">Creator economy</div>
+              <h2 class="section-title">Monetization staged like a premium cockpit, not a back-office dashboard.</h2>
+              <p class="section-copy">The creator surface blends revenue, fan energy, live momentum, subscriptions, and conversion into one sharp neon command layer.</p>
+            </section>
+
+            <section class="dual-panel">
+              <div class="creator-overview glass tilt-card is-reveal is-visible">
+                <div class="window-bar">
+                  <strong>Creator cockpit</strong>
+                  <span class="caps">Today / premium mode</span>
+                </div>
+                <div class="panel large">
+                  <div class="caps">Revenue velocity</div>
+                  <div class="chart-line"></div>
+                </div>
+                <div class="stats-grid">
+                  <article class="metric-card tilt-card">
+                    <div class="eyebrow">Subscriptions</div>
+                    <div class="metric-value">$84K</div>
+                    <p class="card-copy">Recurring income mapped directly to community health and retention quality.</p>
+                    <div class="glow-line"></div>
+                  </article>
+                  <article class="metric-card tilt-card">
+                    <div class="eyebrow">Clip commerce</div>
+                    <div class="metric-value">2.3x</div>
+                    <p class="card-copy">Live moments convert into premium assets without leaving the conversation layer.</p>
+                    <div class="glow-line"></div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="creator-shell">
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Fan tiers</div>
+                  <div class="metric-value">4 bands</div>
+                  <p class="card-copy">Audience value is segmented by intent, not vanity follower counts.</p>
+                  <div class="glow-line"></div>
+                </article>
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Live conversion</div>
+                  <div class="metric-value">18%</div>
+                  <p class="card-copy">Interactive moments become offers, drops, and access layers in one motion path.</p>
+                  <div class="glow-line"></div>
+                </article>
+                <article class="metric-card tilt-card is-reveal is-visible">
+                  <div class="eyebrow">Analytics glow</div>
+                  <div class="metric-value">360</div>
+                  <p class="card-copy">Every chart is tied to a product action: boost, reward, gate, or expand.</p>
+                  <div class="glow-line"></div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" data-page-label="05 / Communities">
+          <div class="page-inner">
+            <section class="section-header is-reveal is-visible">
+              <div class="eyebrow">Community layer</div>
+              <h2 class="section-title">Communities designed as living premium worlds.</h2>
+              <p class="section-copy">Fcom communities are immersive micro-environments with mood, hierarchy, live energy, and identity cues that feel authored rather than templated.</p>
+            </section>
+
+            <section class="quad-grid community-grid">
+              <article class="community-card tilt-card is-reveal is-visible">
+                <div class="eyebrow">Design futures</div>
+                <h3 class="card-title">25K members</h3>
+                <p class="card-copy">Deep critique, product rituals, and invite-only circles for people building the next interface era.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="community-card tilt-card is-reveal is-visible">
+                <div class="eyebrow">Creator signal</div>
+                <h3 class="card-title">8.4K live now</h3>
+                <p class="card-copy">Realtime drop alerts, premium edits, and collaborative room launches layered in one visual stack.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="community-card tilt-card is-reveal is-visible">
+                <div class="eyebrow">Code + craft</div>
+                <h3 class="card-title">91% match</h3>
+                <p class="card-copy">Taste graphs connect engineers, founders, and visual thinkers through shared output instead of bios.</p>
+                <div class="glow-line"></div>
+              </article>
+              <article class="community-card tilt-card is-reveal is-visible">
+                <div class="eyebrow">Private circles</div>
+                <h3 class="card-title">Holo-ready</h3>
+                <p class="card-copy">Intimate paid groups with ambient access states, quiet modes, and privilege-aware room controls.</p>
+                <div class="glow-line"></div>
+              </article>
+            </section>
+
+            <footer class="footer-shell is-reveal is-visible">
+              <div class="footer-top">
+                <div>
+                  <div class="eyebrow">Fcom / next social layer</div>
+                  <h2>Built for presence, not noise.</h2>
+                </div>
+                <div class="cta-row">
+                  <a class="primary-button magnetic" href="#0">Request early access</a>
+                  <a class="ghost-button magnetic" href="#0">Download product deck</a>
+                </div>
+              </div>
+              <div class="footer-line"></div>
+              <div class="footer-links">
+                <a href="#0">Manifesto</a>
+                <a href="#0">Creators</a>
+                <a href="#0">Communities</a>
+                <a href="#0">Careers</a>
+                <a href="#0">Privacy</a>
+              </div>
+            </footer>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const pageLabel = document.getElementById("pageLabel");
+    const pageButtons = Array.from(document.querySelectorAll("[data-page-target]"));
+    const pages = Array.from(document.querySelectorAll(".page"));
+    const revealNodes = Array.from(document.querySelectorAll(".is-reveal"));
+    const magneticNodes = Array.from(document.querySelectorAll(".magnetic"));
+    const tiltNodes = Array.from(document.querySelectorAll(".tilt-card"));
+    const cursorGlow = document.querySelector(".cursor-glow");
+    const particleCanvas = document.querySelector(".particle-canvas");
+    const loader = document.getElementById("loader");
+    let activePage = 0;
+    let scrollTicking = false;
+
+    const updatePageUI = (index) => {
+      activePage = Math.max(0, Math.min(index, pages.length - 1));
+      pageButtons.forEach((button) => {
+        button.classList.toggle("is-active", Number(button.dataset.pageTarget) === activePage);
+      });
+      pageLabel.textContent = pages[activePage].dataset.pageLabel;
+    };
+
+    const revealPage = (index) => {
+      pages[index].querySelectorAll(".is-reveal").forEach((node, idx) => {
+        setTimeout(() => node.classList.add("is-visible"), idx * 70);
+      });
+    };
+
+    const getScrollTarget = (index) => {
+      const topbar = document.querySelector(".topbar");
+      const topbarHeight = topbar ? topbar.getBoundingClientRect().height : 0;
+      const top = pages[index].getBoundingClientRect().top + window.scrollY - topbarHeight - 24;
+      return Math.max(0, top);
+    };
+
+    const scrollToPage = (index) => {
+      const targetIndex = Math.max(0, Math.min(index, pages.length - 1));
+      revealPage(targetIndex);
+      window.scrollTo({
+        top: getScrollTarget(targetIndex),
+        behavior: "smooth"
+      });
+      updatePageUI(targetIndex);
+    };
+
+    const syncActivePageFromScroll = () => {
+      const probeLine = window.innerHeight * 0.38;
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      pages.forEach((page, index) => {
+        const rect = page.getBoundingClientRect();
+        const distance = Math.abs(rect.top - probeLine);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      if (closestIndex !== activePage) {
+        updatePageUI(closestIndex);
+      }
+      revealPage(closestIndex);
+      scrollTicking = false;
+    };
+
+    pageButtons.forEach((button) => {
+      button.addEventListener("click", () => scrollToPage(Number(button.dataset.pageTarget)));
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" || event.key === "PageDown") scrollToPage(activePage + 1);
+      if (event.key === "ArrowUp" || event.key === "PageUp") scrollToPage(activePage - 1);
+    });
+
+    window.addEventListener("scroll", () => {
+      if (scrollTicking) return;
+      scrollTicking = true;
+      requestAnimationFrame(syncActivePageFromScroll);
+    }, { passive: true });
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add("is-visible");
+      });
+    }, { threshold: 0.15 });
+
+    revealNodes.forEach((node) => observer.observe(node));
+
+    window.addEventListener("pointermove", (event) => {
+      const x = `${event.clientX}px`;
+      const y = `${event.clientY}px`;
+      document.documentElement.style.setProperty("--mx", x);
+      document.documentElement.style.setProperty("--my", y);
+      cursorGlow.style.opacity = "1";
+    });
+
+    window.addEventListener("pointerleave", () => {
+      cursorGlow.style.opacity = "0";
+    });
+
+    magneticNodes.forEach((node) => {
+      node.addEventListener("pointermove", (event) => {
+        const rect = node.getBoundingClientRect();
+        const x = event.clientX - rect.left - rect.width / 2;
+        const y = event.clientY - rect.top - rect.height / 2;
+        node.style.transform = `translate(${x * 0.08}px, ${y * 0.08}px)`;
+      });
+      node.addEventListener("pointerleave", () => {
+        node.style.transform = "";
+      });
+    });
+
+    tiltNodes.forEach((node) => {
+      const isFloatingWindow = node.classList.contains("window") && node.closest(".floating-scene");
+      node.addEventListener("pointermove", (event) => {
+        const rect = node.getBoundingClientRect();
+        const px = (event.clientX - rect.left) / rect.width;
+        const py = (event.clientY - rect.top) / rect.height;
+        const rx = (0.5 - py) * (isFloatingWindow ? 5 : 10);
+        const ry = (px - 0.5) * (isFloatingWindow ? 6 : 12);
+        node.style.setProperty("--tilt-x", `${rx}deg`);
+        node.style.setProperty("--tilt-y", `${ry}deg`);
+        node.style.setProperty("--lift-y", "-4px");
+      });
+      node.addEventListener("pointerleave", () => {
+        node.style.removeProperty("--tilt-x");
+        node.style.removeProperty("--tilt-y");
+        node.style.removeProperty("--lift-y");
+      });
+    });
+
+    const ctx = particleCanvas.getContext("2d");
+    const particles = [];
+    const resizeCanvas = () => {
+      particleCanvas.width = window.innerWidth * devicePixelRatio;
+      particleCanvas.height = window.innerHeight * devicePixelRatio;
+      particleCanvas.style.width = `${window.innerWidth}px`;
+      particleCanvas.style.height = `${window.innerHeight}px`;
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    };
+
+    const seedParticles = () => {
+      particles.length = 0;
+      const count = Math.max(40, Math.floor(window.innerWidth / 28));
+      for (let i = 0; i < count; i += 1) {
+        particles.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          r: Math.random() * 2.4 + 0.6,
+          vx: (Math.random() - 0.5) * 0.16,
+          vy: (Math.random() - 0.5) * 0.16,
+          hue: i % 3 === 0 ? "59,130,246" : i % 3 === 1 ? "139,92,246" : "34,211,238"
+        });
+      }
+    };
+
+    const drawParticles = () => {
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      particles.forEach((particle) => {
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        if (particle.x < -20) particle.x = window.innerWidth + 20;
+        if (particle.x > window.innerWidth + 20) particle.x = -20;
+        if (particle.y < -20) particle.y = window.innerHeight + 20;
+        if (particle.y > window.innerHeight + 20) particle.y = -20;
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${particle.hue}, 0.42)`;
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = `rgba(${particle.hue}, 0.4)`;
+        ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      requestAnimationFrame(drawParticles);
+    };
+
+    resizeCanvas();
+    seedParticles();
+    drawParticles();
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      seedParticles();
+    });
+
+    setTimeout(() => {
+      loader.classList.add("is-hidden");
+    }, 1550);
+
+    updatePageUI(0);
+    revealPage(0);
+  </script>
+</body>
+</html>

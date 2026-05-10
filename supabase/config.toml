@@ -1,0 +1,104 @@
+# Supabase project configuration
+# See: https://supabase.com/docs/guides/local-development
+#
+# This file controls LOCAL development (`supabase start`).
+# For production/staging set secrets in:
+#   Dashboard → Settings → Edge Functions → Secrets
+
+# ─── Project ref (fill in after `supabase link`) ─────────────────────────────
+# project_id = "vzjlhiqvfgrrlfdgyebx"
+
+[api]
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port     = 54322
+major_version = 15
+
+# Seed file applied after migrations on `supabase db reset`
+[db.seed]
+sql_paths = ["./seed.sql"]
+
+[studio]
+port = 54323
+
+[inbucket]
+# Local SMTP / email testing UI
+port = 54324
+
+[storage]
+file_size_limit = "50MiB"
+
+[auth]
+site_url = "http://localhost:3000"
+# Supabase Auth is intentionally disabled — Fcom uses custom JWT via Edge Functions.
+enable_signup = false
+
+[edge_runtime]
+policy = "per_worker"
+
+# ─── Local environment variables for Edge Functions ───────────────────────────
+# These are injected when running `supabase functions serve` locally.
+# Equivalent to the Secrets set in the Dashboard for the hosted project.
+#
+# WARNING: This block is for local dev ONLY.
+#          Never put real production secrets here — this file is committed.
+#
+# Override real values in a git-ignored .env.local file and pass it with:
+#   supabase functions serve --env-file .env.local
+
+[functions.env]
+JWT_SECRET                = "dev_only_jwt_secret_change_before_prod_32chars_min"
+# SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically by
+# `supabase start` — you do NOT need to set them here for local dev.
+SMS_API_URL               = ""   # leave blank to enable dev OTP mode (code returned in response)
+SMS_API_KEY               = ""
+ALLOWED_ORIGIN            = "*"
+
+# ─── Per-function configuration ───────────────────────────────────────────────
+# All functions inherit the [functions.env] block above.
+# Individual overrides can be added as [functions.<name>] sections if needed.
+
+[functions.register]
+verify_jwt = false   # public endpoint — no Supabase JWT check
+
+[functions.login]
+verify_jwt = false
+
+[functions.verify-phone]
+verify_jwt = false
+
+[functions.resend-otp]
+verify_jwt = false
+
+# All other functions default to verify_jwt = false as well because Fcom uses
+# its OWN custom JWT checked inside each Edge Function via _shared/jwt.ts.
+# Setting verify_jwt = true here would require a Supabase Auth token, which
+# this project does not use.
+
+[functions.logout]
+verify_jwt = false
+
+[functions.set-password]
+verify_jwt = false
+
+[functions.approve]
+verify_jwt = false
+
+[functions.reject]
+verify_jwt = false
+
+[functions.rate]
+verify_jwt = false
+
+[functions.messages]
+verify_jwt = false
+
+[functions.users]
+verify_jwt = false
+
+[functions.cleanup]
+verify_jwt = false
