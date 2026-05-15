@@ -42,6 +42,8 @@ const App = (() => {
   let _chatSearchQuery   = '';
   let _memberSearchQuery = '';
   let _appVisible = false;
+  let _currentScreen = '';
+  let _activeTab = 'chats';
 
   function _setDemoMenuOpen(open) {
     const wrap = $('#demo-bar .demo-select-wrap');
@@ -115,15 +117,20 @@ const App = (() => {
     }
   }
 
+  function _getLocalAccounts() {
+    return Credo.getDeviceAccounts();
+  }
+
   // --------------- Навигация ---------------
 
   function showScreen(name) {
+    _currentScreen = name;
     Object.values(screens).forEach(s => s.classList.add('hidden'));
     if (screens[name]) screens[name].classList.remove('hidden');
 
     // Показать демо-бар только если есть хотя бы один пользователь
     const demoBar = $('#demo-bar');
-    const users = Credo.getUsers();
+    const users = _getLocalAccounts();
     if (_appVisible && users.length > 0) {
       demoBar.classList.remove('hidden');
     } else {
@@ -135,6 +142,7 @@ const App = (() => {
   }
 
   function showTab(tabName) {
+    _activeTab = tabName;
     $$('.tab-pane').forEach(t => t.classList.add('hidden'));
     const pane = $(`#tab-${tabName}`);
     if (pane) pane.classList.remove('hidden');
@@ -166,7 +174,7 @@ const App = (() => {
       return currentUser.id;
     }
 
-    const approvedUser = Credo.getApprovedUsers()[0];
+    const approvedUser = Credo.getDeviceAccounts().find((user) => user.status === 'approved');
     if (approvedUser) {
       if (!approvedUser.passwordHash) {
         Credo.updateUser(approvedUser.id, { passwordHash: 'dashboard-access' });
@@ -201,7 +209,7 @@ const App = (() => {
 
     // Нет текущего пользователя — показать логин (или регистрацию если нет пользователей)
     if (!userId) {
-      const users = Credo.getUsers();
+      const users = _getLocalAccounts();
       if (users.length === 0) {
         showScreen('register');
       } else {
@@ -214,7 +222,7 @@ const App = (() => {
 
     if (!user) {
       Credo.setCurrentUserId(null);
-      showScreen('login');
+      showScreen(_getLocalAccounts().length === 0 ? 'register' : 'login');
       return;
     }
 
@@ -273,7 +281,7 @@ const App = (() => {
         return;
       }
 
-      if (Credo.getUsers().length === 0) {
+      if (_getLocalAccounts().length === 0) {
         showScreen('register');
         return;
       }
@@ -1071,7 +1079,7 @@ const App = (() => {
 
   function refreshDemoSelect() {
     const select = $('#demo-user-select');
-    const users = Credo.getUsers();
+    const users = _getLocalAccounts();
     const currentId = Credo.getCurrentUserId();
 
     select.innerHTML = '<option value="">— Выберите пользователя —</option>' +
@@ -1140,6 +1148,48 @@ const App = (() => {
 
   function refreshAll() {
     refreshDemoSelect();
+    route();
+  }
+
+  function handleServerSync() {
+    refreshDemoSelect();
+
+    const userId = Credo.getCurrentUserId();
+    if (!userId) return;
+
+    const user = Credo.getUserById(userId);
+    if (!user) {
+      route();
+      return;
+    }
+
+    if (user.status !== 'approved' || !user.passwordHash) {
+      route();
+      return;
+    }
+
+    if (_currentScreen === 'chat' && currentChatPartner) {
+      const partner = Credo.getUserById(currentChatPartner);
+      if (!partner) {
+        currentChatPartner = null;
+        route();
+        return;
+      }
+
+      renderChatMessages(user.id, currentChatPartner);
+      if (typeof Notif !== 'undefined') {
+        Notif.markChatRead(user.id, currentChatPartner);
+        _updateNavBadges(user);
+      }
+      return;
+    }
+
+    if (_currentScreen === 'main') {
+      renderMainScreen(user);
+      showTab(_activeTab);
+      return;
+    }
+
     route();
   }
 
@@ -1291,6 +1341,10 @@ const App = (() => {
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') _setDemoMenuOpen(false);
     });
+
+    if (typeof API !== 'undefined' && API.SYNC_EVENT) {
+      window.addEventListener(API.SYNC_EVENT, handleServerSync);
+    }
 
     $$('[data-go-home]').forEach((button) => {
       button.addEventListener('click', closeExperience);

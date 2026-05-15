@@ -11,6 +11,7 @@
     { "key": "bob_token",   "value": "" },
     { "key": "carol_token", "value": "" },
     { "key": "reg_token",   "value": "" },
+    { "key": "seed_password", "value": "testpass" },
     { "key": "new_user_id", "value": "" },
     { "key": "new_phone",   "value": "+79009876543" },
     { "key": "dev_otp",     "value": "" },
@@ -33,7 +34,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -47,7 +48,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -61,7 +62,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"carol\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"carol\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -355,7 +356,7 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{reg_token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -369,7 +370,7 @@
             "method": "POST",
             "url": "{{base_url}}/set-password",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -405,7 +406,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -451,7 +452,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"dave\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"dave\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -465,7 +466,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"eve\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"eve\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",
@@ -861,7 +862,7 @@
             "method": "POST",
             "url": "{{base_url}}/login",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"testpass\"}" }
+            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "const r = pm.response.json();",

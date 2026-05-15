@@ -12,6 +12,9 @@ Before running tests, ensure:
 - Edge Functions deployed
 - `JWT_SECRET` set, `SMS_API_URL` empty (dev OTP mode active)
 
+Seed password:
+- All seeded users use the shared password `testpass`
+
 ### Seed user reference
 
 | Nickname | UUID suffix | Status | cred | Notes |
@@ -19,7 +22,7 @@ Before running tests, ensure:
 | `alice` | `…000001` | approved | 42.50 | High-cred, has messages with bob/carol |
 | `bob` | `…000002` | approved | 18.00 | Has messages with alice |
 | `carol` | `…000003` | approved | 5.75 | Has messages with alice |
-| `dave` | `…000004` | pending | 0 | No password, no phone verified |
+| `dave` | `…000004` | pending | 0 | Password `testpass`, phone not verified |
 | `eve` | `…000005` | rejected | 0 | Blocked |
 | `frank` | `…000006` | approved | 1.00 | School №2, isolated |
 | `grace` | `…000007` | pending | 0 | School №2 |

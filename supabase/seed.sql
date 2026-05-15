@@ -10,20 +10,22 @@
 --   Production:    DO NOT run — this file is for dev/staging only
 --
 -- PASSWORDS
---   All seed users have NO password set (passwordHash IS NULL).
---   After the seed:
---     1. Open the app → login screen → click a user in the demo bar
---     2. The "Set password" screen appears → set your test password
---   OR call POST /set-password with the registration token from POST /login (not applicable
---   for seed users — just set via the dashboard UPDATE if needed for automated tests).
+--   All seed users use the same password: testpass
+--   Hash format matches supabase/functions/_shared/bcrypt.ts (PBKDF2-SHA256).
+--   This keeps Postman and TESTING.md reproducible after `supabase db reset`.
 --
 -- NOTES
 --   - UUIDs are hard-coded so relations stay consistent across resets.
---   - status = 'approved' users can log in immediately after setting a password.
+--   - status = 'approved' users can log in immediately with `testpass`.
+--   - pending / rejected users also have `testpass` set so login tests can reach
+--     `account_not_approved` / `account_rejected` instead of `invalid_credentials`.
 --   - The first user per school is auto-approved by the trigger; these seeds bypass
 --     that by inserting directly — which requires set_config('app.allow_direct_write','true',true)
 --     only when status/cred are set together. Here we INSERT the full row directly which is
 --     fine because the guard trigger fires only on UPDATE, not INSERT.
+--
+-- Shared password hash for all seed users:
+--   pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b
 
 -- ─── Clean slate (re-runnable) ──────────────────────────────────────────────
 
@@ -52,7 +54,7 @@ INSERT INTO public.users (
   'Иванова Алиса Сергеевна',
   'Школа №1', '11А', 'alice',
   '+79001000001', true,
-  NULL,          -- set password via app or API after seeding
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'approved', 42.50,
   now() - interval '30 days'
 ),
@@ -62,7 +64,7 @@ INSERT INTO public.users (
   'Петров Борис Иванович',
   'Школа №1', '10Б', 'bob',
   '+79001000002', true,
-  NULL,
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'approved', 18.00,
   now() - interval '20 days'
 ),
@@ -72,7 +74,7 @@ INSERT INTO public.users (
   'Сидорова Карина Олеговна',
   'Школа №1', '9В', 'carol',
   NULL, false,
-  NULL,
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'approved', 5.75,
   now() - interval '10 days'
 ),
@@ -82,7 +84,7 @@ INSERT INTO public.users (
   'Козлов Дмитрий Александрович',
   'Школа №1', '9В', 'dave',
   '+79001000004', false,
-  NULL,
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'pending', 0,
   now() - interval '1 day'
 ),
@@ -92,7 +94,7 @@ INSERT INTO public.users (
   'Новикова Евгения Петровна',
   'Школа №1', '10А', 'eve',
   '+79001000005', true,
-  NULL,
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'rejected', 0,
   now() - interval '5 days'
 ),
@@ -104,7 +106,7 @@ INSERT INTO public.users (
   'Орлов Фёдор Николаевич',
   'Школа №2', '11Б', 'frank',
   NULL, false,
-  NULL,
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'approved', 1,
   now() - interval '15 days'
 ),
@@ -114,7 +116,7 @@ INSERT INTO public.users (
   'Зайцева Галина Михайловна',
   'Школа №2', '10А', 'grace',
   '+79002000007', false,
-  NULL,
+  'pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b',
   'pending', 0,
   now() - interval '2 days'
 );
@@ -198,11 +200,12 @@ BEGIN
   RAISE NOTICE '  Messages     : %', msg_count;
   RAISE NOTICE '  Rate entries : %', rate_count;
   RAISE NOTICE '────────────────────────────────────────';
-  RAISE NOTICE 'Test accounts (set password via app or /set-password):';
+  RAISE NOTICE 'Test accounts (shared password: testpass):';
   RAISE NOTICE '  alice  — approved, Школа №1, cred 42.50';
   RAISE NOTICE '  bob    — approved, Школа №1, cred 18.00';
   RAISE NOTICE '  carol  — approved, Школа №1, cred  5.75';
   RAISE NOTICE '  dave   — pending,  Школа №1 (approve via alice/bob)';
+  RAISE NOTICE '  eve    — rejected, Школа №1';
   RAISE NOTICE '  frank  — approved, Школа №2, cred  1.00';
   RAISE NOTICE '  grace  — pending,  Школа №2 (approve via frank)';
 END;

@@ -26,10 +26,15 @@ const API = (() => {
   // ─── CONFIGURATION ────────────────────────────────────────────────
   const SUPABASE_URL   = 'https://vzjlhiqvfgrrlfdgyebx.supabase.co';
   const FUNCTIONS_BASE = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1` : null;
+  const SYNC_EVENT     = 'fcom:server-sync';
+  const SYNC_INTERVAL  = 2000;
 
   // ─── TOKEN STORAGE ────────────────────────────────────────────────
   const TOKEN_KEY     = 'fcom_token';      // long-lived session JWT (after login)
   const REG_TOKEN_KEY = 'fcom_reg_token';  // 1-hour JWT returned after /register
+
+  let _syncTimer = null;
+  let _syncInFlight = null;
 
   function getToken()     { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t)    { t ? localStorage.setItem(TOKEN_KEY, t)     : localStorage.removeItem(TOKEN_KEY); }
@@ -77,6 +82,18 @@ const API = (() => {
       .join('');
   }
 
+  function _emitSync(detail) {
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail }));
+  }
+
+  function _writeJSONIfChanged(key, value) {
+    const next = JSON.stringify(value);
+    const prev = localStorage.getItem(key);
+    if (prev === next) return false;
+    localStorage.setItem(key, next);
+    return true;
+  }
+
   // ─── SYNC: populate localStorage from server ──────────────────────
   // Called after login and on each page load when a token exists.
   // Writes into the same localStorage keys that credo.js reads, so all
@@ -84,7 +101,9 @@ const API = (() => {
   async function _syncFromServer(currentUser) {
     try {
       const usersRes = await _call('/users');
-      if (!usersRes.ok) return;
+      if (!usersRes.ok) {
+        return { ok: false, changed: false, error: usersRes.error || 'sync_failed' };
+      }
 
       // Build deduplicated user map; preserve local arrays (ratings, chats)
       const existingUsers = Credo.getUsers();
@@ -92,34 +111,53 @@ const API = (() => {
       existingUsers.forEach(u => { existingMap[u.id] = u; });
 
       const userMap = {};
+      Credo.getDeviceAccounts().forEach(u => {
+        if (!u?.id) return;
+        userMap[u.id] = {
+          ratings: u.ratings || [],
+          chats:   u.chats   || [],
+          ...u,
+        };
+      });
+
       [currentUser, ...usersRes.users, ...usersRes.pending].forEach(u => {
         if (!u?.id) return;
         const existing = existingMap[u.id] || {};
+        const preservedPasswordHash = existing.passwordHash || userMap[u.id]?.passwordHash;
         userMap[u.id] = {
           ratings: existing.ratings || [],
           chats:   existing.chats   || [],
+          ...(preservedPasswordHash ? { passwordHash: preservedPasswordHash } : {}),
           ...u,
         };
       });
 
       const allUsers = Object.values(userMap);
-      localStorage.setItem('credo_users', JSON.stringify(allUsers));
+      let usersChanged = _writeJSONIfChanged('credo_users', allUsers);
 
       // Sync chat messages from each approved partner
       const partners = (usersRes.users || []).filter(u => u.id !== currentUser.id);
       const existingChats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      let chatsChanged = false;
 
       await Promise.allSettled(partners.map(async (partner) => {
         try {
           const msgRes = await _call(`/messages?partnerId=${partner.id}`);
-          if (!msgRes.ok || !msgRes.messages || !msgRes.messages.length) return;
-
           const chatKey = [currentUser.id, partner.id].sort().join('::');
-          existingChats[chatKey] = msgRes.messages.map(m => ({
-            from: m.fromId,
-            text: m.text,
-            time: m.time,
-          }));
+          const nextMessages = (msgRes.ok && Array.isArray(msgRes.messages))
+            ? msgRes.messages.map(m => ({
+              from: m.fromId,
+              text: m.text,
+              time: m.time,
+            }))
+            : [];
+
+          if (JSON.stringify(existingChats[chatKey] || []) !== JSON.stringify(nextMessages)) {
+            existingChats[chatKey] = nextMessages;
+            chatsChanged = true;
+          }
+
+          if (!nextMessages.length) return;
 
           // Keep chats[] arrays on user objects in sync
           const cu = userMap[currentUser.id];
@@ -129,12 +167,23 @@ const API = (() => {
         } catch { /* skip individual chat failure */ }
       }));
 
-      localStorage.setItem('credo_chats', JSON.stringify(existingChats));
-      localStorage.setItem('credo_users', JSON.stringify(Object.values(userMap)));
+      if (chatsChanged) {
+        localStorage.setItem('credo_chats', JSON.stringify(existingChats));
+      }
+
+      const finalUsers = Object.values(userMap);
+      usersChanged = _writeJSONIfChanged('credo_users', finalUsers) || usersChanged;
       Credo.setCurrentUserId(currentUser.id);
+      return {
+        ok: true,
+        changed: usersChanged || chatsChanged,
+        usersChanged,
+        chatsChanged,
+      };
 
     } catch (e) {
       console.warn('[API] Sync from server failed:', e);
+      return { ok: false, changed: false, error: 'network_error' };
     }
   }
 
@@ -143,6 +192,44 @@ const API = (() => {
   //   1. Calls the original Credo method — updates localStorage immediately
   //      (synchronous, so app.js view rendering works unchanged)
   //   2. Fires the backend call as a background side-effect (fire-and-forget)
+  async function syncNow() {
+    if (!FUNCTIONS_BASE || !getToken()) {
+      return { ok: false, changed: false, error: 'not_authenticated' };
+    }
+
+    if (_syncInFlight) return _syncInFlight;
+
+    const currentId = Credo.getCurrentUserId();
+    const currentUser = currentId ? Credo.getUserById(currentId) : null;
+    if (!currentUser) {
+      return { ok: false, changed: false, error: 'missing_current_user' };
+    }
+
+    _syncInFlight = _syncFromServer(currentUser)
+      .then((result) => {
+        if (result?.ok && result.changed) _emitSync(result);
+        return result;
+      })
+      .finally(() => {
+        _syncInFlight = null;
+      });
+
+    return _syncInFlight;
+  }
+
+  function startLiveSync() {
+    if (!FUNCTIONS_BASE || !getToken()) return;
+    stopLiveSync();
+    _syncTimer = setInterval(() => {
+      syncNow().catch(() => {});
+    }, SYNC_INTERVAL);
+  }
+
+  function stopLiveSync() {
+    clearInterval(_syncTimer);
+    _syncTimer = null;
+  }
+
   function _patchCredo() {
     if (!FUNCTIONS_BASE) return; // local-only mode: no patching needed
 
@@ -227,6 +314,7 @@ const API = (() => {
     }
 
     Credo.setCurrentUserId(user.id);
+    Credo.markDeviceAccount(user.id);
     return result;
   }
 
@@ -270,6 +358,7 @@ const API = (() => {
       // Accept both SHA-256 hash and '__set__' sentinel (backend-set password)
       if (user.passwordHash === hash || user.passwordHash === '__set__') {
         Credo.setCurrentUserId(user.id);
+        Credo.markDeviceAccount(user.id);
         return { ok: true, user };
       }
       return { ok: false };
@@ -287,7 +376,25 @@ const API = (() => {
 
     // Store session token and sync all data into localStorage
     setToken(result.token);
-    await _syncFromServer(result.user);
+    Credo.setCurrentUserId(result.user.id);
+    Credo.markDeviceAccount(result.user.id);
+    const cachedUsers = Credo.getUsers();
+    const existingIndex = cachedUsers.findIndex(u => u.id === result.user.id);
+    const seededUser = {
+      ratings: [],
+      chats: [],
+      passwordHash: '__set__',
+      ...(existingIndex >= 0 ? cachedUsers[existingIndex] : {}),
+      ...result.user,
+    };
+
+    if (existingIndex >= 0) cachedUsers[existingIndex] = seededUser;
+    else cachedUsers.push(seededUser);
+    localStorage.setItem('credo_users', JSON.stringify(cachedUsers));
+
+    await _syncFromServer(seededUser);
+    Credo.updateUser(result.user.id, { passwordHash: '__set__' });
+    startLiveSync();
 
     return result;
   }
@@ -343,6 +450,7 @@ const API = (() => {
     }
     setToken(null);
     setRegToken(null);
+    stopLiveSync();
     Credo.setCurrentUserId(null);
     return { ok: true };
   }
@@ -373,9 +481,15 @@ const API = (() => {
     const currentId = Credo.getCurrentUserId();
     if (!currentId) return;
 
-    const currentUser = Credo.getUserById(currentId);
+    Credo.markDeviceAccount(currentId);
+
+    let currentUser = Credo.getUserById(currentId);
+    if (currentUser && !currentUser.passwordHash) {
+      currentUser = Credo.updateUser(currentId, { passwordHash: '__set__' }) || currentUser;
+    }
     if (currentUser) {
-      _syncFromServer(currentUser).catch(() => {});
+      syncNow().catch(() => {});
+      startLiveSync();
     }
   }
 
@@ -389,6 +503,10 @@ const API = (() => {
     setPassword,
     verifyPhone,
     resendOtp,
+    syncNow,
+    startLiveSync,
+    stopLiveSync,
+    SYNC_EVENT,
     approve,
     reject,
   };

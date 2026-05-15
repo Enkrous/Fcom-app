@@ -38,6 +38,31 @@ const Credo = (() => {
   function getChats()    { return loadJSON('credo_chats', {}); }
   function saveChats(c)  { saveJSON('credo_chats', c); }
 
+  function getDeviceAccountIds() {
+    const ids = loadJSON('credo_device_accounts', null);
+    if (Array.isArray(ids) && ids.length > 0) {
+      return [...new Set(ids)];
+    }
+
+    const currentUserId = getCurrentUserId();
+    const derivedIds = getUsers()
+      .filter(u => Boolean(u.passwordHash) || u.id === currentUserId)
+      .map(u => u.id);
+
+    if (derivedIds.length > 0) {
+      saveJSON('credo_device_accounts', derivedIds);
+    }
+
+    return derivedIds;
+  }
+
+  function markDeviceAccount(id) {
+    if (!id) return;
+    const ids = new Set(getDeviceAccountIds());
+    ids.add(id);
+    saveJSON('credo_device_accounts', [...ids]);
+  }
+
   function isDeviceBlocked() {
     return localStorage.getItem('credo_blocked') === 'true';
   }
@@ -57,6 +82,11 @@ const Credo = (() => {
 
   function getUserById(id) {
     return getUsers().find(u => u.id === id) || null;
+  }
+
+  function getDeviceAccounts() {
+    const deviceIds = new Set(getDeviceAccountIds());
+    return getUsers().filter(u => deviceIds.has(u.id));
   }
 
   function updateUser(id, patch) {
@@ -134,6 +164,7 @@ const Credo = (() => {
     users.push(user);
     saveUsers(users);
     setCurrentUserId(user.id);
+    markDeviceAccount(user.id);
 
     return { ok: true, user };
   }
@@ -361,6 +392,7 @@ const Credo = (() => {
     localStorage.removeItem('credo_users');
     localStorage.removeItem('credo_rate_log');
     localStorage.removeItem('credo_chats');
+    localStorage.removeItem('credo_device_accounts');
     localStorage.removeItem('credo_blocked');
     localStorage.removeItem('credo_current_user');
   }
@@ -371,9 +403,11 @@ const Credo = (() => {
     // Данные
     updateUser,
     getUsers,
+    getDeviceAccounts,
     getUserById,
     getCurrentUserId,
     setCurrentUserId,
+    markDeviceAccount,
     isDeviceBlocked,
     blockDevice,
 
