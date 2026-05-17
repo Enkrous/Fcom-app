@@ -135,8 +135,8 @@ export async function getGroupAccess(
   let memberRole = membership?.role ?? null;
   let isMember = Boolean(membership);
 
-  if (group.type === 'school_public' && !isFcomAdmin) {
-    if (!isSameSchool(group.school, callerSchool)) {
+  if (group.type === 'school_public') {
+    if (!isFcomAdmin && !isSameSchool(group.school, callerSchool)) {
       return { group, memberRole, canView: false, canManage: false };
     }
 
@@ -146,12 +146,12 @@ export async function getGroupAccess(
         .upsert({
           groupId,
           userId,
-          role: 'member',
+          role: isFcomAdmin ? 'admin' : 'member',
           addedBy: userId,
         }, { onConflict: 'groupId,userId' });
 
       if (insertMembershipErr) throw insertMembershipErr;
-      memberRole = 'member';
+      memberRole = isFcomAdmin ? 'admin' : 'member';
       isMember = true;
     }
   }

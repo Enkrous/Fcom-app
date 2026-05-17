@@ -137,6 +137,28 @@ const App = (() => {
     return user?.role === 'admin';
   }
 
+  function _enforceSingleAccountForRegularUser(user) {
+    if (!user?.id || _isAdmin(user) || typeof Credo.keepOnlyDeviceAccount !== 'function') return;
+    Credo.keepOnlyDeviceAccount(user.id);
+  }
+
+  function _syncDemoBarMode(user) {
+    const demoBar = $('#demo-bar');
+    const brand = $('#demo-brand');
+    const resetBtn = $('#demo-reset-btn');
+    const selectWrap = $('#demo-bar .demo-select-wrap');
+
+    if (!demoBar) return;
+
+    const isAdmin = _isAdmin(user);
+    demoBar.classList.toggle('demo-bar--admin', isAdmin);
+    demoBar.classList.toggle('demo-bar--user', Boolean(user) && !isAdmin);
+
+    if (brand) brand.classList.toggle('hidden', !user || isAdmin);
+    if (selectWrap) selectWrap.classList.toggle('hidden', !isAdmin);
+    if (resetBtn) resetBtn.classList.toggle('hidden', !isAdmin);
+  }
+
   function _isGroupChatOpen() {
     return Boolean(currentChatGroup);
   }
@@ -156,10 +178,11 @@ const App = (() => {
     Object.values(screens).forEach(s => s.classList.add('hidden'));
     if (screens[name]) screens[name].classList.remove('hidden');
 
-    // Показать демо-бар только если есть хотя бы один пользователь
+    // Показать верхний бар только для активного пользователя.
     const demoBar = $('#demo-bar');
-    const users = _getLocalAccounts();
-    if (_appVisible && users.length > 0) {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    _syncDemoBarMode(currentUser);
+    if (_appVisible && currentUser) {
       demoBar.classList.remove('hidden');
     } else {
       demoBar.classList.add('hidden');
@@ -255,6 +278,8 @@ const App = (() => {
       showScreen(_isBackendMode() ? 'login' : (_getLocalAccounts().length === 0 ? 'register' : 'login'));
       return;
     }
+
+    _enforceSingleAccountForRegularUser(user);
 
     if (user.status === 'rejected') {
       showScreen('blocked');
@@ -409,6 +434,7 @@ const App = (() => {
 
   function renderMainScreen(user) {
     if (!user) return;
+    _enforceSingleAccountForRegularUser(user);
 
     // Запустить отслеживание активности текущего пользователя
     if (typeof Presence !== 'undefined') {
@@ -1755,12 +1781,17 @@ const App = (() => {
     const select = $('#demo-user-select');
     const users = _getLocalAccounts();
     const currentId = Credo.getCurrentUserId();
+    const currentUser = currentId ? Credo.getUserById(currentId) : null;
 
-    select.innerHTML = '<option value="">— Выберите пользователя —</option>' +
-      users.map(u => {
+    _syncDemoBarMode(currentUser);
+    if (!_isAdmin(currentUser)) return;
+
+    select.innerHTML = '<option value="">- Select user -</option>' +
+      users.map((u) => {
         const sel = u.id === currentId ? ' selected' : '';
-        const status = u.status === 'pending' ? ' (заявка)'
-                     : u.status === 'rejected' ? ' (откл.)' : '';
+        const status = u.status === 'pending' ? ' (pending)'
+                     : u.status === 'rejected' ? ' (rejected)' : '';
+
         return `<option value="${u.id}"${sel}>@${u.nickname}${status}</option>`;
       }).join('');
 
@@ -1768,6 +1799,9 @@ const App = (() => {
   }
 
   function handleDemoSwitch(forcedId) {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!_isAdmin(currentUser)) return;
+
     const select = $('#demo-user-select');
     const id = typeof forcedId === 'string' ? forcedId : select.value;
     if (select.value !== id) {

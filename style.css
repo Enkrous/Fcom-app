@@ -464,6 +464,24 @@ a {
   backdrop-filter: blur(18px) saturate(150%);
 }
 
+.demo-bar--user {
+  width: min(calc(100% - 24px), 520px);
+  justify-content: space-between;
+}
+
+.demo-brand {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.demo-bar--user .demo-select-wrap,
+.demo-bar--user #demo-reset-btn {
+  display: none !important;
+}
+
 .demo-bar select {
   flex: 1;
   min-width: 0;

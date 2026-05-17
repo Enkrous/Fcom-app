@@ -72,6 +72,11 @@ const Credo = (() => {
     saveJSON('credo_device_accounts', [...ids]);
   }
 
+  function keepOnlyDeviceAccount(id) {
+    if (!id) return;
+    saveJSON('credo_device_accounts', [id]);
+  }
+
   function isDeviceBlocked() {
     return localStorage.getItem('credo_blocked') === 'true';
   }
@@ -558,6 +563,7 @@ const Credo = (() => {
     getCurrentUserId,
     setCurrentUserId,
     markDeviceAccount,
+    keepOnlyDeviceAccount,
     isDeviceBlocked,
     blockDevice,
 
