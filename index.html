@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fcom Messenger</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="landing-shell" class="landing-shell">
+    <iframe
+      id="landing-frame"
+      class="landing-frame"
+      src="landing.html"
+      title="Fcom landing"
+      loading="eager"
+    ></iframe>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <div id="demo-bar" class="demo-bar hidden">
+      <div class="demo-select-wrap">
+        <select id="demo-user-select" class="demo-select-native" aria-hidden="true">
+          <option value="">- Выберите пользователя -</option>
+        </select>
+        <button
+          id="demo-user-trigger"
+          class="demo-select-trigger"
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded="false"
+        >
+          <span id="demo-user-trigger-label" class="demo-select-trigger-label">Выберите пользователя</span>
+          <span class="demo-select-chevron" aria-hidden="true"></span>
+        </button>
+        <div id="demo-user-menu" class="demo-select-menu hidden" role="listbox"></div>
+      </div>
+      <button id="demo-logout-btn" class="btn btn-outline btn-small" type="button">Выйти</button>
+      <button id="demo-reset-btn" class="btn btn-danger btn-small" type="button">Сбросить</button>
+    </div>
+
+    <section id="screen-register" class="screen hidden">
+      <div class="screen-shell auth-shell auth-shell-wide">
+        <div class="glass-panel auth-hero">
+          <div class="auth-head">
+            <button class="btn btn-outline btn-small" type="button" data-go-home>На лендинг</button>
+          </div>
+          <div class="brand">
+            <div class="brand-mark">F</div>
+            <div class="brand-copy">
+              <strong>Fcom Messenger</strong>
+              <span>Регистрация нового аккаунта</span>
+            </div>
+          </div>
+          <h1>Начните общаться как в настоящем мессенджере</h1>
+          <p class="hero-copy">После регистрации аккаунт можно подтвердить, войти с другого устройства и общаться между разными пользователями через Supabase backend.</p>
+          <div class="hero-points">
+            <div class="hero-point">
+              <strong>Один аккаунт, несколько устройств</strong>
+              <span>Сообщения синхронизируются через backend, а не только через локальное хранилище браузера.</span>
+            </div>
+            <div class="hero-point">
+              <strong>Приватные диалоги</strong>
+              <span>Открывайте чат с любым одобренным участником и продолжайте разговор с любого устройства.</span>
+            </div>
+          </div>
+        </div>
+
+        <form id="register-form" class="glass-panel auth-card">
+          <div class="auth-head auth-head-center">
+            <div class="brand">
+              <div class="brand-copy">
+                <strong>Регистрация</strong>
+                <span>Создайте профиль участника</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group form-group-full">
+              <label for="reg-fullname">ФИО</label>
+              <input id="reg-fullname" name="fullName" type="text" autocomplete="name" placeholder="Иванов Иван Иванович" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-school">Школа</label>
+              <input id="reg-school" name="school" type="text" placeholder="Школа №12" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-grade">Класс</label>
+              <input id="reg-grade" name="grade" type="text" placeholder="10А" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-nickname">Никнейм</label>
+              <input id="reg-nickname" name="nickname" type="text" autocomplete="username" placeholder="cool_user" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-phone">Телефон <span class="label-note">для OTP</span></label>
+              <input id="reg-phone" name="phone" type="tel" autocomplete="tel" placeholder="+7 700 000 00 00">
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-block" type="submit">Зарегистрироваться</button>
+          <p class="hint">Если аккаунт уже существует, откройте экран входа через кнопку ниже.</p>
+          <button class="btn btn-outline btn-block" type="button" data-open-login>У меня уже есть аккаунт</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="screen-verify-phone" class="screen hidden">
+      <div class="screen-shell auth-shell">
+        <div class="glass-panel auth-card compact-card">
+          <div class="auth-head">
+            <button class="btn btn-outline btn-small" type="button" data-go-home>На лендинг</button>
+          </div>
+          <h2>Подтверждение телефона</h2>
+          <p class="subtitle">Код отправлен на номер <strong id="verify-phone-number">-</strong>.</p>
+          <div class="form-group">
+            <label for="otp-code">Код из SMS</label>
+            <input id="otp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+          </div>
+          <button id="otp-submit-btn" class="btn btn-primary btn-block" type="button">Подтвердить</button>
+          <p id="otp-dev-hint" class="hint hint-dev"></p>
+          <p id="otp-attempts-hint" class="hint hint-danger hidden"></p>
+          <div class="auth-link-row">
+            <a id="otp-resend-link" class="link-accent" href="#">Отправить код ещё раз</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-set-password" class="screen hidden">
+      <div class="screen-shell auth-shell">
+        <div class="glass-panel auth-card compact-card">
+          <div class="auth-head">
+            <button class="btn btn-outline btn-small" type="button" data-go-home>На лендинг</button>
+          </div>
+          <h2>Создание пароля</h2>
+          <p class="subtitle">Аккаунт <strong id="setpass-nickname">@user</strong> одобрен. Осталось задать пароль для входа с любого устройства.</p>
+          <div class="form-group">
+            <label for="setpass-password">Пароль</label>
+            <input id="setpass-password" type="password" autocomplete="new-password" placeholder="Придумайте пароль">
+          </div>
+          <button id="setpass-btn" class="btn btn-primary btn-block" type="button">Сохранить пароль</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-login" class="screen hidden">
+      <div class="screen-shell auth-shell auth-shell-wide">
+        <div class="glass-panel auth-hero">
+          <div class="auth-head">
+            <button class="btn btn-outline btn-small" type="button" data-go-home>На лендинг</button>
+          </div>
+          <div class="brand">
+            <div class="brand-mark">F</div>
+            <div class="brand-copy">
+              <strong>Fcom Messenger</strong>
+              <span>Вход в существующий аккаунт</span>
+            </div>
+          </div>
+          <h1>Войдите и продолжайте диалог на любом устройстве</h1>
+          <p class="hero-copy">Если вы уже зарегистрированы, используйте никнейм и пароль. После входа чаты и участники синхронизируются с backend.</p>
+        </div>
+
+        <div class="glass-panel auth-card compact-card">
+          <div class="auth-head auth-head-center">
+            <div class="brand-copy">
+              <strong>Вход</strong>
+              <span>Подключение к аккаунту</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="login-nickname">Никнейм</label>
+            <input id="login-nickname" type="text" autocomplete="username" placeholder="cool_user">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Пароль</label>
+            <input id="login-password" type="password" autocomplete="current-password" placeholder="Введите пароль">
+          </div>
+          <button id="login-btn" class="btn btn-primary btn-block" type="button">Войти</button>
+          <div class="auth-link-row">
+            <button id="login-register-link" class="btn btn-outline btn-block" type="button">Регистрация</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-blocked" class="screen hidden">
+      <div class="screen-shell auth-shell">
+        <div class="glass-panel status-card">
+          <div class="status-icon">!</div>
+          <h2>Устройство заблокировано</h2>
+          <p class="subtitle">Регистрация и вход с этого устройства временно недоступны.</p>
+          <button class="btn btn-outline" type="button" data-go-home>Вернуться на лендинг</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-pending" class="screen hidden">
+      <div class="screen-shell auth-shell">
+        <div class="glass-panel status-card">
+          <div class="status-icon">...</div>
+          <h2>Заявка отправлена</h2>
+          <p class="subtitle">Аккаунт <strong id="pending-nickname">@user</strong> ожидает одобрения.</p>
+          <p class="hint">После одобрения вы сможете задать пароль и войти как в полноценный мессенджер.</p>
+          <button class="btn btn-outline" type="button" data-go-home>Вернуться на лендинг</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-main" class="screen hidden">
+      <div class="screen-shell main-screen-shell">
+        <header class="topbar">
+          <button id="app-home-btn" class="btn btn-outline btn-small" type="button">На лендинг</button>
+          <div class="topbar-copy">
+            <h2 id="main-greeting">Привет</h2>
+          </div>
+          <div id="main-cred-badge" class="cred-badge novice">
+            <span id="main-cred-value" class="cred-value">0</span>
+            <span id="main-cred-level" class="cred-level">Novice</span>
+          </div>
+        </header>
+
+        <nav class="bottom-nav">
+          <button class="nav-btn active" type="button" data-tab="chats">
+            <span class="nav-label">Чаты</span>
+            <span id="badge-chats" class="nav-badge">0</span>
+          </button>
+          <button class="nav-btn" type="button" data-tab="users">
+            <span class="nav-label">Участники</span>
+            <span id="badge-users" class="nav-badge">0</span>
+          </button>
+          <button class="nav-btn" type="button" data-tab="profile">
+            <span class="nav-label">Профиль</span>
+          </button>
+        </nav>
+
+        <div class="main-grid">
+          <aside class="glass-panel overview-panel">
+            <div>
+              <h3>Messenger</h3>
+              <p class="subtitle">Личный кабинет, уведомления и переход к оценке участников.</p>
+            </div>
+            <div id="rate-notification" class="notification hidden">
+              <p>Пора оценить недавние взаимодействия.</p>
+              <button id="rate-notification-btn" class="btn btn-accent btn-small" type="button">Оценить</button>
+            </div>
+          </aside>
+
+          <div class="tab-content">
+            <section id="tab-chats" class="pane-shell tab-pane">
+              <div class="pane-head">
+                <div>
+                  <h3>Чаты</h3>
+                  <p class="subtitle">Личные диалоги с одобренными участниками.</p>
+                </div>
+              </div>
+              <div class="search-wrap">
+                <input id="search-chats" class="search-input" type="search" placeholder="Поиск по чатам">
+              </div>
+              <div id="chat-list" class="card-list"></div>
+            </section>
+
+            <section id="tab-users" class="tab-pane hidden">
+              <div class="users-grid">
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>Заявки</h3>
+                      <p class="subtitle">Новые участники, ожидающие одобрения.</p>
+                    </div>
+                  </div>
+                  <div id="pending-empty" class="search-empty-state">Новых заявок пока нет.</div>
+                  <div id="pending-list" class="card-list"></div>
+                </div>
+
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>Участники</h3>
+                      <p class="subtitle">Открывайте чат и общайтесь между аккаунтами.</p>
+                    </div>
+                  </div>
+                  <div class="search-wrap">
+                    <input id="search-members" class="search-input" type="search" placeholder="Поиск по участникам">
+                  </div>
+                  <div id="members-empty" class="search-empty-state">Пока нет доступных участников.</div>
+                  <div id="members-list" class="card-list"></div>
+                </div>
+              </div>
+            </section>
+
+            <section id="tab-profile" class="tab-pane hidden">
+              <div class="profile-grid">
+                <div class="profile-card novice">
+                  <div class="pane-head">
+                    <div>
+                      <h3 id="profile-fullname">Имя</h3>
+                      <p id="profile-info" class="subtitle">@nickname · school · class</p>
+                    </div>
+                  </div>
+                  <div class="cred-display">
+                    <div id="profile-cred-value" class="cred-big-value novice">0</div>
+                    <div id="profile-cred-level" class="cred-level-label novice">Novice</div>
+                    <div class="cred-bar-wrap">
+                      <div id="profile-cred-bar" class="cred-bar novice"></div>
+                    </div>
+                    <div class="cred-bar-labels">
+                      <span>Novice</span>
+                      <span>Known</span>
+                      <span>Trusted</span>
+                      <span>Own</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>История оценок</h3>
+                      <p class="subtitle">Последние изменения вашего Credo.</p>
+                    </div>
+                  </div>
+                  <div id="rate-history-empty" class="search-empty-state">Оценок пока нет.</div>
+                  <div id="rate-history" class="card-list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-chat" class="screen hidden">
+      <div class="screen-shell">
+        <div class="chat-shell">
+          <div class="chat-header">
+            <button id="chat-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
+            <div class="chat-header-info">
+              <div id="chat-partner-name" class="chat-header-name">@partner</div>
+              <div id="chat-partner-cred" class="chat-header-cred novice">Novice · Кредо 0</div>
+              <div id="chat-header-status" class="chat-header-status"></div>
+            </div>
+          </div>
+
+          <div id="chat-messages" class="chat-messages"></div>
+
+          <div class="chat-input-bar">
+            <input id="chat-input" type="text" autocomplete="off" placeholder="Напишите сообщение">
+            <button id="chat-send-btn" class="btn btn-primary" type="button">Отправить</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-rate" class="screen hidden">
+      <div class="screen-shell">
+        <div class="rate-container glass-panel">
+          <div class="pane-head">
+            <div>
+              <h3>Оценка взаимодействий</h3>
+              <p class="subtitle">Оцените участников, с которыми недавно было общение.</p>
+            </div>
+            <button id="rate-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
+          </div>
+          <div id="rate-user-list" class="card-list"></div>
+          <button id="rate-submit-btn" class="btn btn-primary" type="button">Сохранить оценки</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="avatars.js"></script>
+  <script src="presence.js"></script>
+  <script src="notifications.js"></script>
+  <script src="credo.js"></script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

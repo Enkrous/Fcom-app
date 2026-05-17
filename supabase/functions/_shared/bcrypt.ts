@@ -9,6 +9,10 @@ const ITERATIONS = 100_000;
 const HASH_ALGO  = 'SHA-256';
 const KEY_ALGO   = 'PBKDF2';
 
+function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(data).buffer;
+}
+
 function toHex(buf: ArrayBuffer): string {
   return Array.from(new Uint8Array(buf))
     .map(b => b.toString(16).padStart(2, '0'))
@@ -23,13 +27,13 @@ function fromHex(hex: string): Uint8Array {
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(password), KEY_ALGO, false, ['deriveBits'],
+    'raw', toArrayBuffer(new TextEncoder().encode(password)), KEY_ALGO, false, ['deriveBits'],
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: KEY_ALGO, salt, iterations: ITERATIONS, hash: HASH_ALGO },
+    { name: KEY_ALGO, salt: toArrayBuffer(salt), iterations: ITERATIONS, hash: HASH_ALGO },
     keyMaterial, 256,
   );
-  return `pbkdf2:sha256:${ITERATIONS}:${toHex(salt.buffer)}:${toHex(bits)}`;
+  return `pbkdf2:sha256:${ITERATIONS}:${toHex(toArrayBuffer(salt))}:${toHex(bits)}`;
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
@@ -39,10 +43,10 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const salt = fromHex(parts[3]);
   const expectedHash = parts[4];
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(password), KEY_ALGO, false, ['deriveBits'],
+    'raw', toArrayBuffer(new TextEncoder().encode(password)), KEY_ALGO, false, ['deriveBits'],
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: KEY_ALGO, salt, iterations: ITERATIONS, hash: HASH_ALGO },
+    { name: KEY_ALGO, salt: toArrayBuffer(salt), iterations: ITERATIONS, hash: HASH_ALGO },
     keyMaterial, 256,
   );
   return toHex(bits) === expectedHash;

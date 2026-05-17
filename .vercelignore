@@ -1,0 +1,10 @@
+.git
+.cursor
+.tmp_fcom
+migrations
+supabase
+tests
+BACKEND.md
+DEPLOY.md
+TESTING.md
+.env.example

@@ -6,6 +6,10 @@
 
 import { getServiceClient } from './db.ts';
 
+function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(data).buffer;
+}
+
 function base64url(data: Uint8Array): string {
   return btoa(String.fromCharCode(...data))
     .replace(/\+/g, '-')
@@ -23,7 +27,7 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
   return crypto.subtle.importKey(
     'raw',
-    enc.encode(secret),
+    toArrayBuffer(enc.encode(secret)),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify'],
@@ -49,7 +53,7 @@ export async function signJWT(payload: JWTPayload, secret: string): Promise<stri
   const signingInput = `${header}.${body}`;
 
   const key = await hmacKey(secret);
-  const sigBuffer = await crypto.subtle.sign('HMAC', key, enc.encode(signingInput));
+  const sigBuffer = await crypto.subtle.sign('HMAC', key, toArrayBuffer(enc.encode(signingInput)));
   const sig = base64url(new Uint8Array(sigBuffer));
 
   return `${signingInput}.${sig}`;
@@ -65,9 +69,9 @@ export async function verifyJWT(token: string, secret: string): Promise<JWTPaylo
   const signingInput = `${header}.${body}`;
 
   const key = await hmacKey(secret);
-  const sigBuffer = base64urlDecode(sig);
+  const sigBuffer = toArrayBuffer(base64urlDecode(sig));
 
-  const valid = await crypto.subtle.verify('HMAC', key, sigBuffer, enc.encode(signingInput));
+  const valid = await crypto.subtle.verify('HMAC', key, sigBuffer, toArrayBuffer(enc.encode(signingInput)));
   if (!valid) throw new Error('invalid_token');
 
   const payload: JWTPayload = JSON.parse(new TextDecoder().decode(base64urlDecode(body)));

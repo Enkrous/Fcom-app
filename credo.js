@@ -198,9 +198,12 @@ const Credo = (() => {
     const key = chatKey(fromId, toId);
     if (!chats[key]) chats[key] = [];
     chats[key].push({
+      id: generateId(),
       from: fromId,
+      to: toId,
       text,
       time: new Date().toISOString(),
+      readAt: null,
     });
     saveChats(chats);
 

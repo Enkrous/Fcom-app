@@ -32,6 +32,22 @@ const Notif = (() => {
   /** Пометить чат как прочитанный (вызывать при открытии чата). */
   function markChatRead(userId, partnerId) {
     const msgs  = Credo.getChatMessages(userId, partnerId);
+    const hasServerReadState = msgs.some((msg) => Object.prototype.hasOwnProperty.call(msg, 'readAt'));
+
+    if (hasServerReadState) {
+      const key = Credo.chatKey(userId, partnerId);
+      const chats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      const readAt = new Date().toISOString();
+
+      chats[key] = msgs.map((msg) => (
+        msg.from === userId || msg.readAt
+          ? msg
+          : { ...msg, readAt }
+      ));
+
+      localStorage.setItem('credo_chats', JSON.stringify(chats));
+    }
+
     const store = _readStore(userId);
     store[partnerId] = msgs.length;
     localStorage.setItem(READ_KEY + userId, JSON.stringify(store));
@@ -44,6 +60,12 @@ const Notif = (() => {
   function getUnreadCount(userId, partnerId) {
     const msgs = Credo.getChatMessages(userId, partnerId);
     if (!msgs.length) return 0;
+
+    const hasServerReadState = msgs.some((msg) => Object.prototype.hasOwnProperty.call(msg, 'readAt'));
+    if (hasServerReadState) {
+      return msgs.filter((msg) => msg.from !== userId && !msg.readAt).length;
+    }
+
     if (msgs[msgs.length - 1].from === userId) return 0;
     const lastRead = _readStore(userId)[partnerId] || 0;
     return Math.max(0, msgs.length - lastRead);

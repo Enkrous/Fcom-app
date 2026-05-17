@@ -1685,13 +1685,17 @@
       requestAnimationFrame(syncActivePageFromScroll);
     }, { passive: true });
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) entry.target.classList.add("is-visible");
-      });
-    }, { threshold: 0.15 });
+    if ("IntersectionObserver" in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add("is-visible");
+        });
+      }, { threshold: 0.15 });
 
-    revealNodes.forEach((node) => observer.observe(node));
+      revealNodes.forEach((node) => observer.observe(node));
+    } else {
+      revealNodes.forEach((node) => node.classList.add("is-visible"));
+    }
 
     window.addEventListener("pointermove", (event) => {
       const x = `${event.clientX}px`;
@@ -1736,57 +1740,66 @@
       });
     });
 
-    const ctx = particleCanvas.getContext("2d");
-    const particles = [];
-    const resizeCanvas = () => {
-      particleCanvas.width = window.innerWidth * devicePixelRatio;
-      particleCanvas.height = window.innerHeight * devicePixelRatio;
-      particleCanvas.style.width = `${window.innerWidth}px`;
-      particleCanvas.style.height = `${window.innerHeight}px`;
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    };
-
-    const seedParticles = () => {
-      particles.length = 0;
-      const count = Math.max(40, Math.floor(window.innerWidth / 28));
-      for (let i = 0; i < count; i += 1) {
-        particles.push({
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-          r: Math.random() * 2.4 + 0.6,
-          vx: (Math.random() - 0.5) * 0.16,
-          vy: (Math.random() - 0.5) * 0.16,
-          hue: i % 3 === 0 ? "59,130,246" : i % 3 === 1 ? "139,92,246" : "34,211,238"
-        });
+    let ctx = null;
+    if (typeof particleCanvas.getContext === "function") {
+      try {
+        ctx = particleCanvas.getContext("2d");
+      } catch (error) {
+        ctx = null;
       }
-    };
+    }
+    if (ctx) {
+      const particles = [];
+      const resizeCanvas = () => {
+        particleCanvas.width = window.innerWidth * devicePixelRatio;
+        particleCanvas.height = window.innerHeight * devicePixelRatio;
+        particleCanvas.style.width = `${window.innerWidth}px`;
+        particleCanvas.style.height = `${window.innerHeight}px`;
+        ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      };
 
-    const drawParticles = () => {
-      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      particles.forEach((particle) => {
-        particle.x += particle.vx;
-        particle.y += particle.vy;
-        if (particle.x < -20) particle.x = window.innerWidth + 20;
-        if (particle.x > window.innerWidth + 20) particle.x = -20;
-        if (particle.y < -20) particle.y = window.innerHeight + 20;
-        if (particle.y > window.innerHeight + 20) particle.y = -20;
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(${particle.hue}, 0.42)`;
-        ctx.shadowBlur = 18;
-        ctx.shadowColor = `rgba(${particle.hue}, 0.4)`;
-        ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
-      requestAnimationFrame(drawParticles);
-    };
+      const seedParticles = () => {
+        particles.length = 0;
+        const count = Math.max(40, Math.floor(window.innerWidth / 28));
+        for (let i = 0; i < count; i += 1) {
+          particles.push({
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
+            r: Math.random() * 2.4 + 0.6,
+            vx: (Math.random() - 0.5) * 0.16,
+            vy: (Math.random() - 0.5) * 0.16,
+            hue: i % 3 === 0 ? "59,130,246" : i % 3 === 1 ? "139,92,246" : "34,211,238"
+          });
+        }
+      };
 
-    resizeCanvas();
-    seedParticles();
-    drawParticles();
-    window.addEventListener("resize", () => {
+      const drawParticles = () => {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        particles.forEach((particle) => {
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          if (particle.x < -20) particle.x = window.innerWidth + 20;
+          if (particle.x > window.innerWidth + 20) particle.x = -20;
+          if (particle.y < -20) particle.y = window.innerHeight + 20;
+          if (particle.y > window.innerHeight + 20) particle.y = -20;
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(${particle.hue}, 0.42)`;
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = `rgba(${particle.hue}, 0.4)`;
+          ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        requestAnimationFrame(drawParticles);
+      };
+
       resizeCanvas();
       seedParticles();
-    });
+      drawParticles();
+      window.addEventListener("resize", () => {
+        resizeCanvas();
+        seedParticles();
+      });
+    }
 
     setTimeout(() => {
       loader.classList.add("is-hidden");

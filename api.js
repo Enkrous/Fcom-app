@@ -35,6 +35,7 @@ const API = (() => {
 
   let _syncTimer = null;
   let _syncInFlight = null;
+  let _origSendMessage = null;
 
   function getToken()     { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t)    { t ? localStorage.setItem(TOKEN_KEY, t)     : localStorage.removeItem(TOKEN_KEY); }
@@ -146,9 +147,12 @@ const API = (() => {
           const chatKey = [currentUser.id, partner.id].sort().join('::');
           const nextMessages = (msgRes.ok && Array.isArray(msgRes.messages))
             ? msgRes.messages.map(m => ({
+              id: m.id,
               from: m.fromId,
+              to: m.toId,
               text: m.text,
               time: m.time,
+              readAt: m.readAt ?? null,
             }))
             : [];
 
@@ -265,6 +269,7 @@ const API = (() => {
 
     // sendMessage
     const _origSend = Credo.sendMessage.bind(Credo);
+    _origSendMessage = _origSend;
     Credo.sendMessage = function(fromId, toId, text) {
       _origSend(fromId, toId, text);
       _call('/messages', { method: 'POST', body: { toId, text } })
@@ -466,6 +471,44 @@ const API = (() => {
     return Credo.rejectUser(userId);
   }
 
+  async function sendMessage(fromId, toId, text) {
+    if (!FUNCTIONS_BASE) {
+      Credo.sendMessage(fromId, toId, text);
+      const messages = Credo.getChatMessages(fromId, toId);
+      return { ok: true, message: messages[messages.length - 1] || null };
+    }
+
+    const originalSend = _origSendMessage || Credo.sendMessage.bind(Credo);
+    const chatKey = Credo.chatKey(fromId, toId);
+    const previousMessages = Credo.getChatMessages(fromId, toId).slice();
+    const usersSnapshot = Credo.getUsers().map((user) => ({
+      ...user,
+      ratings: Array.isArray(user.ratings) ? [...user.ratings] : [],
+      chats: Array.isArray(user.chats) ? [...user.chats] : [],
+    }));
+
+    originalSend(fromId, toId, text);
+
+    let result;
+    try {
+      result = await _call('/messages', { method: 'POST', body: { toId, text } });
+    } catch {
+      result = { ok: false, error: 'network_error' };
+    }
+
+    if (!result?.ok) {
+      const chats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      if (previousMessages.length > 0) chats[chatKey] = previousMessages;
+      else delete chats[chatKey];
+      localStorage.setItem('credo_chats', JSON.stringify(chats));
+      localStorage.setItem('credo_users', JSON.stringify(usersSnapshot));
+      return result;
+    }
+
+    await syncNow().catch(() => {});
+    return result;
+  }
+
   // ─── INIT ─────────────────────────────────────────────────────────
   function _init() {
     _patchCredo();
@@ -503,9 +546,11 @@ const API = (() => {
     setPassword,
     verifyPhone,
     resendOtp,
+    sendMessage,
     syncNow,
     startLiveSync,
     stopLiveSync,
+    isBackendEnabled: () => Boolean(FUNCTIONS_BASE),
     SYNC_EVENT,
     approve,
     reject,

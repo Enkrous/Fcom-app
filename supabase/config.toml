@@ -16,7 +16,7 @@ max_rows = 1000
 
 [db]
 port     = 54322
-major_version = 15
+major_version = 17
 
 # Seed file applied after migrations on `supabase db reset`
 [db.seed]
@@ -50,7 +50,7 @@ policy = "per_worker"
 # Override real values in a git-ignored .env.local file and pass it with:
 #   supabase functions serve --env-file .env.local
 
-[functions.env]
+[edge_runtime.secrets]
 JWT_SECRET                = "dev_only_jwt_secret_change_before_prod_32chars_min"
 # SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically by
 # `supabase start` — you do NOT need to set them here for local dev.

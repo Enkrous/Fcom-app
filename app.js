@@ -121,6 +121,12 @@ const App = (() => {
     return Credo.getDeviceAccounts();
   }
 
+  function _isBackendMode() {
+    return typeof API !== 'undefined'
+      && typeof API.isBackendEnabled === 'function'
+      && API.isBackendEnabled();
+  }
+
   // --------------- Навигация ---------------
 
   function showScreen(name) {
@@ -210,7 +216,9 @@ const App = (() => {
     // Нет текущего пользователя — показать логин (или регистрацию если нет пользователей)
     if (!userId) {
       const users = _getLocalAccounts();
-      if (users.length === 0) {
+      if (_isBackendMode()) {
+        showScreen('login');
+      } else if (users.length === 0) {
         showScreen('register');
       } else {
         showScreen('login');
@@ -222,7 +230,7 @@ const App = (() => {
 
     if (!user) {
       Credo.setCurrentUserId(null);
-      showScreen(_getLocalAccounts().length === 0 ? 'register' : 'login');
+      showScreen(_isBackendMode() ? 'login' : (_getLocalAccounts().length === 0 ? 'register' : 'login'));
       return;
     }
 
@@ -281,7 +289,7 @@ const App = (() => {
         return;
       }
 
-      if (_getLocalAccounts().length === 0) {
+      if (!_isBackendMode() && _getLocalAccounts().length === 0) {
         showScreen('register');
         return;
       }
@@ -445,6 +453,22 @@ const App = (() => {
       );
     }
 
+    approved = approved
+      .map((user) => {
+        const messages = Credo.getChatMessages(currentUser.id, user.id);
+        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+        return {
+          user,
+          messages,
+          lastMessage,
+          lastActivity: lastMessage ? new Date(lastMessage.time).getTime() : 0,
+        };
+      })
+      .sort((a, b) => {
+        if (b.lastActivity !== a.lastActivity) return b.lastActivity - a.lastActivity;
+        return a.user.nickname.localeCompare(b.user.nickname, 'ru');
+      });
+
     if (approved.length === 0) {
       container.innerHTML = query
         ? _searchEmptyHTML(query)
@@ -453,22 +477,22 @@ const App = (() => {
       return;
     }
 
-    container.innerHTML = approved.map(u => {
-      const level   = Credo.getCredLevel(u.cred);
-      const msgs    = Credo.getChatMessages(currentUser.id, u.id);
+    container.innerHTML = approved.map(({ user, messages, lastMessage }) => {
+      const level   = Credo.getCredLevel(user.cred);
+      const msgs    = messages;
       const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1].text : 'Нет сообщений';
       const unread  = typeof Notif !== 'undefined'
-        ? Notif.getUnreadCount(currentUser.id, u.id) : 0;
+        ? Notif.getUnreadCount(currentUser.id, user.id) : 0;
 
       return `
-        <div class="card chat-card" data-user-id="${u.id}">
-          ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
+        <div class="card chat-card" data-user-id="${user.id}">
+          ${Avatar.html({ seed: user.nickname, imageUrl: user.avatarUrl || '' })}
           <div class="card-body">
-            <div class="card-name">${u.nickname}
+            <div class="card-name">${user.nickname}
               <span class="level-badge ${level.css}">${level.name}</span>
             </div>
             <div class="card-sub">
-              <span class="card-user-status" data-status-for="${u.id}"></span><span class="card-last-msg">${truncate(lastMsg, 36)}</span>
+              <span class="card-user-status" data-status-for="${user.id}"></span><span class="card-last-msg">${truncate(lastMsg, msgs.length > 0 ? 36 : 44)}</span>
             </div>
           </div>
           ${unread > 0 ? `<span class="chat-unread-count">${unread > 99 ? '99+' : unread}</span>` : ''}
@@ -598,8 +622,15 @@ const App = (() => {
               </div>
               <div class="card-sub">${u.fullName} · Кредо: ${u.cred}</div>
             </div>
+            <div class="card-actions">
+              <button class="btn btn-small" type="button" data-open-chat="${u.id}">Chat</button>
+            </div>
           </div>`;
       }).join('');
+
+      membersList.querySelectorAll('[data-open-chat]').forEach(button => {
+        button.addEventListener('click', () => openChat(button.dataset.openChat));
+      });
     }
   }
 
@@ -699,6 +730,10 @@ const App = (() => {
 
     renderChatMessages(me.id, partnerId);
     showScreen('chat');
+
+    if (_isBackendMode() && typeof API.syncNow === 'function') {
+      API.syncNow().catch(() => {});
+    }
   }
 
   /** Сбросить строку статуса в шапке чата. */
@@ -755,44 +790,44 @@ const App = (() => {
     container.scrollTop = container.scrollHeight;
   }
 
-  function handleSendMessage() {
+  async function handleSendMessage() {
     const input = $('#chat-input');
+    const sendButton = $('#chat-send-btn');
     const text = input.value.trim();
     if (!text || !currentChatPartner) return;
 
     const myId = Credo.getCurrentUserId();
+    const partnerId = currentChatPartner;
 
     // Сбросить «печатает» до отправки
     clearTimeout(_typingDebounceTimer);
     if (typeof Presence !== 'undefined') {
-      Presence.setTyping(myId, currentChatPartner, false);
+      Presence.setTyping(myId, partnerId, false);
     }
 
-    Credo.sendMessage(myId, currentChatPartner, text);
+    if (sendButton) sendButton.disabled = true;
+    input.disabled = true;
+
+    let result;
+    if (typeof API !== 'undefined' && typeof API.sendMessage === 'function') {
+      result = await API.sendMessage(myId, partnerId, text);
+    } else {
+      Credo.sendMessage(myId, partnerId, text);
+      result = { ok: true };
+    }
+
+    if (sendButton) sendButton.disabled = false;
+    input.disabled = false;
+
+    if (!result?.ok) {
+      renderChatMessages(myId, partnerId);
+      alert('Send failed: ' + (result.error || 'unknown_error'));
+      return;
+    }
+
     input.value = '';
-
-    const container = $('#chat-messages');
-
-    // Убрать заглушку «Напишите первое сообщение», если она есть
-    const hint = container.querySelector('.hint');
-    if (hint) hint.remove();
-
-    // Получаем время из только что сохранённого сообщения
-    const msgs = Credo.getChatMessages(myId, currentChatPartner);
-    const newMsg = msgs[msgs.length - 1];
-
-    // Добавляем только новый пузырь с анимацией появления.
-    // Полный перерендер не нужен — это сохраняет анимацию и не мерцает история.
-    const el = document.createElement('div');
-    el.className = 'msg sent msg-new';
-    el.innerHTML = `
-      <div class="msg-text">${escapeHtml(newMsg.text)}</div>
-      <div class="msg-footer">
-        <div class="msg-actions"><button class="msg-react-btn" aria-label="Реакция" title="Добавить реакцию">+</button></div>
-        <div class="msg-time">${formatTime(newMsg.time)}</div>
-      </div>`;
-    container.appendChild(el);
-    container.scrollTop = container.scrollHeight;
+    renderChatMessages(myId, partnerId);
+    input.focus();
   }
 
   // --------------- Экран оценки ---------------
@@ -1245,6 +1280,12 @@ const App = (() => {
     if (regLink) {
       regLink.addEventListener('click', () => showScreen('register'));
     }
+    $$('[data-open-login]').forEach((button) => {
+      button.addEventListener('click', () => openExperience('login'));
+    });
+    $$('[data-open-register]').forEach((button) => {
+      button.addEventListener('click', () => openExperience('register'));
+    });
 
     // Навигация по вкладкам
     $$('.nav-btn').forEach(btn => {

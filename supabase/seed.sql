@@ -131,7 +131,7 @@ VALUES
 
 -- ─── Messages ────────────────────────────────────────────────────────────────
 
-INSERT INTO public.messages ("fromId", "toId", text, "createdAt", "readAt")
+INSERT INTO public.messages ("fromId", "toId", text, time, "readAt")
 VALUES
   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002',
    'Привет, Борис! Как дела?', now() - interval '5 days', now() - interval '5 days'),
@@ -152,7 +152,7 @@ VALUES
 -- and update cred manually using the sanctioned apply_cred_delta() function.
 
 INSERT INTO public.rate_log (
-  "from", "to", score, weight, "baseDelta", "effectiveDelta", "createdAt"
+  "from", "to", score, weight, "baseDelta", "effectiveDelta", date
 ) VALUES
   -- Bob rates Alice: score 5, full weight
   ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
