@@ -27,12 +27,18 @@ const App = (() => {
     rate:         $('#screen-rate'),
     chat:         $('#screen-chat'),
     verifyPhone:  $('#screen-verify-phone'),
+    userProfile:  $('#screen-user-profile'),
   };
 
   // Текущее состояние
   let currentChatPartner = null;
+  let currentChatGroup   = null;
+  let currentProfileUser = null;
+  let _profileReturnState = null;
+  let _adminStatsRequest = 0;
   let pendingRatings  = {};  // { toId: score }
   let _pendingPhone   = '';  // phone waiting for OTP confirmation
+  let _pendingChatImage = null;
 
   // Presence: таймеры
   let _typingDebounceTimer  = null;  // debounce «печатает»
@@ -129,6 +135,18 @@ const App = (() => {
 
   function _isAdmin(user) {
     return user?.role === 'admin';
+  }
+
+  function _isGroupChatOpen() {
+    return Boolean(currentChatGroup);
+  }
+
+  function _getCurrentChatMessages(myId) {
+    if (_isGroupChatOpen()) {
+      return Credo.getGroupMessages(currentChatGroup);
+    }
+    if (!currentChatPartner) return [];
+    return Credo.getChatMessages(myId, currentChatPartner);
   }
 
   // --------------- Навигация ---------------
@@ -352,6 +370,8 @@ const App = (() => {
     }
 
     currentChatPartner = null;
+    currentChatGroup = null;
+    _clearPendingChatImage();
     _resetChatStatus();
     setAppVisible(false);
   }
@@ -417,13 +437,29 @@ const App = (() => {
     }
 
     renderChatList(user);
+    renderGroupList(user);
     renderUsersTab(user);
     renderProfileTab(user);
+    _syncAdminNavigation(user);
+    if (_isAdmin(user)) {
+      renderAdminTab();
+    }
 
     // Обновить badges и проверить новые события
     _updateNavBadges(user);
     if (_isAdmin(user) && typeof Notif !== 'undefined') {
       Notif.checkAndNotify(user, () => showTab('users'));
+    }
+  }
+
+  function _syncAdminNavigation(user) {
+    const adminBtn = $('#nav-admin-btn');
+    if (!adminBtn) return;
+
+    const isAdmin = _isAdmin(user);
+    adminBtn.classList.toggle('hidden', !isAdmin);
+    if (!isAdmin && _activeTab === 'admin') {
+      showTab('chats');
     }
   }
 
@@ -434,7 +470,8 @@ const App = (() => {
   function _updateNavBadges(user) {
     if (typeof Notif === 'undefined') return;
     _setBadge('badge-chats', Notif.getTotalUnread(user.id));
-    _setBadge('badge-users', _isAdmin(user) ? Credo.getPendingUsers().length : 0);
+    const approvalCount = _isAdmin(user) ? Credo.getPendingUsers().length : 0;
+    _setBadge('badge-users', approvalCount + Credo.getGroupInvites().length);
   }
 
   function _setBadge(id, count) {
@@ -497,9 +534,14 @@ const App = (() => {
 
       return `
         <div class="card chat-card" data-user-id="${user.id}">
-          ${Avatar.html({ seed: user.nickname, imageUrl: user.avatarUrl || '' })}
+          <button class="profile-link-btn" type="button" data-open-user-profile="${user.id}">
+            ${Avatar.html({ seed: user.nickname, imageUrl: user.avatarUrl || '' })}
+          </button>
           <div class="card-body">
-            <div class="card-name">${user.nickname}
+            <div class="card-name">
+              <button class="profile-link-btn profile-link-card" type="button" data-open-user-profile="${user.id}">
+                <span class="profile-link-text">${escapeHtml(user.nickname)}</span>
+              </button>
               <span class="level-badge ${level.css}">${level.name}</span>
             </div>
             <div class="card-sub">
@@ -516,9 +558,76 @@ const App = (() => {
       });
     });
 
+    container.querySelectorAll('[data-open-user-profile]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openUserProfile(button.dataset.openUserProfile, { type: 'main', tab: 'chats' });
+      });
+    });
+
     // Немедленно показать текущие статусы, затем запустить обновление
     _updatePresenceList();
     _startPresenceListUpdates();
+  }
+
+  function renderGroupList(currentUser) {
+    const container = $('#group-list');
+    const empty = $('#group-list-empty');
+    const query = _chatSearchQuery.trim().toLowerCase();
+    let groups = Credo.getGroups();
+
+    if (query) {
+      groups = groups.filter((group) =>
+        group.name.toLowerCase().includes(query) ||
+        (group.school && group.school.toLowerCase().includes(query))
+      );
+    }
+
+    groups = groups
+      .map((group) => {
+        const messages = Credo.getGroupMessages(group.id);
+        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+        return {
+          group,
+          lastMessage,
+          lastActivity: lastMessage ? new Date(lastMessage.time).getTime() : 0,
+        };
+      })
+      .sort((a, b) => {
+        if (b.lastActivity !== a.lastActivity) return b.lastActivity - a.lastActivity;
+        return a.group.name.localeCompare(b.group.name, 'ru');
+      });
+
+    if (groups.length === 0) {
+      container.innerHTML = '';
+      empty.textContent = query
+        ? `Ничего не найдено по «${query}»`
+        : 'Пока нет доступных групп.';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    container.innerHTML = groups.map(({ group, lastMessage }) => {
+      const lastMsg = lastMessage
+        ? _messagePreview(lastMessage)
+        : (group.type === 'school_public' ? 'Публичная группа школы' : 'Закрытая группа по приглашениям');
+
+      return `
+        <div class="card chat-card" data-group-id="${group.id}">
+          ${Avatar.html({ seed: group.name, imageUrl: group.avatarUrl || '', chars: 2 })}
+          <div class="card-body">
+            <div class="card-name">${escapeHtml(group.name)}
+              <span class="level-badge ${group.type === 'school_public' ? 'known' : 'trusted'}">${group.type === 'school_public' ? 'School' : 'Group'}</span>
+            </div>
+            <div class="card-sub">${escapeHtml(lastMsg)}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('[data-group-id]').forEach((card) => {
+      card.addEventListener('click', () => openGroupChat(card.dataset.groupId));
+    });
   }
 
   /** Обновить онлайн-точки и статус-текст в списке чатов (без перерисовки). */
@@ -555,6 +664,14 @@ const App = (() => {
   function _stopPresenceListUpdates() {
     clearInterval(_presenceListInterval);
     _presenceListInterval = null;
+  }
+
+  function _messagePreview(message) {
+    if (!message) return 'Нет сообщений';
+    if (message.type === 'image') {
+      return message.text ? `Фото · ${message.text}` : 'Фото';
+    }
+    return message.text || 'Нет сообщений';
   }
 
   // --------------- Вкладка «Пользователи» ---------------
@@ -631,14 +748,20 @@ const App = (() => {
         const level = Credo.getCredLevel(u.cred);
         return `
           <div class="card">
-            ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
+            <button class="profile-link-btn" type="button" data-open-member-profile="${u.id}">
+              ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
+            </button>
             <div class="card-body">
-              <div class="card-name">${u.nickname}
+              <div class="card-name">
+                <button class="profile-link-btn profile-link-card" type="button" data-open-member-profile="${u.id}">
+                  <span class="profile-link-text">${escapeHtml(u.nickname)}</span>
+                </button>
                 <span class="level-badge ${level.css}">${level.name}</span>
               </div>
               <div class="card-sub">${u.fullName} · Кредо: ${u.cred}</div>
             </div>
             <div class="card-actions">
+              <button class="btn btn-outline btn-small" type="button" data-open-member-profile="${u.id}">Профиль</button>
               <button class="btn btn-small" type="button" data-open-chat="${u.id}">Chat</button>
             </div>
           </div>`;
@@ -646,6 +769,67 @@ const App = (() => {
 
       membersList.querySelectorAll('[data-open-chat]').forEach(button => {
         button.addEventListener('click', () => openChat(button.dataset.openChat));
+      });
+      membersList.querySelectorAll('[data-open-member-profile]').forEach((button) => {
+        button.addEventListener('click', () => {
+          openUserProfile(button.dataset.openMemberProfile, { type: 'main', tab: 'users' });
+        });
+      });
+    }
+
+    const picker = $('#group-members-picker');
+    const invitesList = $('#group-invites-list');
+    const invitesEmpty = $('#group-invites-empty');
+    const invites = Credo.getGroupInvites();
+
+    picker.innerHTML = members.length === 0
+      ? '<p class="hint">Сначала нужен хотя бы один одобренный участник для приглашения.</p>'
+      : members.map((user) => `
+          <label class="group-member-option">
+            <input type="checkbox" value="${user.id}">
+            <span>${escapeHtml(user.nickname)} · ${escapeHtml(user.fullName || '')}</span>
+          </label>
+        `).join('');
+
+    if (invites.length === 0) {
+      invitesList.innerHTML = '';
+      invitesEmpty.classList.remove('hidden');
+    } else {
+      invitesEmpty.classList.add('hidden');
+      invitesList.innerHTML = invites.map((invite) => `
+        <div class="card">
+          ${Avatar.html({ seed: invite.group?.name || 'Group', chars: 2 })}
+          <div class="card-body">
+            <div class="card-name">${escapeHtml(invite.group?.name || 'Группа')}</div>
+            <div class="card-sub">Пригласил: @${escapeHtml(invite.invitedBy?.nickname || 'unknown')}</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-success btn-small" data-accept-invite="${invite.id}">Вступить</button>
+            <button class="btn btn-outline btn-small" data-decline-invite="${invite.id}">Отклонить</button>
+          </div>
+        </div>
+      `).join('');
+
+      invitesList.querySelectorAll('[data-accept-invite]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const result = await API.respondGroupInvite(button.dataset.acceptInvite, 'accept');
+          if (!result?.ok) {
+            alert('Не удалось принять приглашение: ' + (result.error || 'unknown_error'));
+            return;
+          }
+          refreshAll();
+        });
+      });
+
+      invitesList.querySelectorAll('[data-decline-invite]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const result = await API.respondGroupInvite(button.dataset.declineInvite, 'decline');
+          if (!result?.ok) {
+            alert('Не удалось отклонить приглашение: ' + (result.error || 'unknown_error'));
+            return;
+          }
+          refreshAll();
+        });
       });
     }
   }
@@ -661,63 +845,294 @@ const App = (() => {
   // --------------- Вкладка «Профиль» ---------------
 
   function renderProfileTab(user) {
+    _renderProfileContent({
+      user,
+      avatarId: 'profile-avatar',
+      fullNameId: 'profile-fullname',
+      infoId: 'profile-info',
+      credValueId: 'profile-cred-value',
+      credLevelId: 'profile-cred-level',
+      credBarId: 'profile-cred-bar',
+      cardSelector: '#tab-profile .profile-card',
+      historyListId: 'rate-history',
+      historyEmptyId: 'rate-history-empty',
+    });
+  }
+
+  function _renderProfileContent({
+    user,
+    avatarId = '',
+    fullNameId,
+    infoId,
+    credValueId,
+    credLevelId,
+    credBarId,
+    cardSelector,
+    historyListId,
+    historyEmptyId,
+  }) {
     const level = Credo.getCredLevel(user.cred);
     const progress = Credo.getCredProgress(user.cred);
 
-    $('#profile-fullname').textContent = user.fullName;
-    $('#profile-info').textContent = `@${user.nickname} · ${user.school} · ${user.grade}`;
+    if (avatarId) {
+      const avatarBox = $('#' + avatarId);
+      if (avatarBox) {
+        avatarBox.innerHTML = Avatar.html({
+          seed: user.nickname,
+          imageUrl: user.avatarUrl || '',
+        });
+      }
+    }
 
-    // Цветовая индикация уровня: большое число, подпись, ореол карточки
-    const credValueEl = $('#profile-cred-value');
-    credValueEl.textContent    = user.cred;
-    credValueEl.className      = `cred-big-value ${level.css}`;
+    $('#' + fullNameId).textContent = user.fullName;
+    $('#' + infoId).textContent = `@${user.nickname} · ${user.school} · ${user.grade}`;
 
-    const credLabelEl = $('#profile-cred-level');
+    const credValueEl = $('#' + credValueId);
+    credValueEl.textContent = user.cred;
+    credValueEl.className = `cred-big-value ${level.css}`;
+
+    const credLabelEl = $('#' + credLevelId);
     credLabelEl.textContent = level.name;
-    credLabelEl.className   = `cred-level-label ${level.css}`;
+    credLabelEl.className = `cred-level-label ${level.css}`;
 
-    // Декоративный ореол профиль-карточки по уровню
-    const profileCard = $('#tab-profile .profile-card');
+    const profileCard = document.querySelector(cardSelector);
     if (profileCard) profileCard.className = `profile-card ${level.css}`;
 
-    const bar = $('#profile-cred-bar');
+    const bar = $('#' + credBarId);
     bar.style.width = (progress * 100) + '%';
     bar.className = 'cred-bar ' + level.css;
 
-    // История оценок
-    const history = Credo.getRateHistory(user.id);
-    const histContainer = $('#rate-history');
-    const histEmpty = $('#rate-history-empty');
+    _renderRateHistory(user.id, $('#' + historyListId), $('#' + historyEmptyId));
+  }
+
+  function _renderRateHistory(userId, histContainer, histEmpty) {
+    const history = Credo.getRateHistory(userId);
 
     if (history.length === 0) {
       histContainer.innerHTML = '';
       histEmpty.classList.remove('hidden');
-    } else {
-      histEmpty.classList.add('hidden');
-      histContainer.innerHTML = history.map(r => {
-        const fromUser = Credo.getUserById(r.from);
-        const fromName = fromUser ? fromUser.nickname : '???';
-        const cls = r.effectiveDelta > 0 ? 'positive'
-                  : r.effectiveDelta < 0 ? 'negative' : 'neutral';
-        const sign = r.effectiveDelta > 0 ? '+' : '';
-        const dateStr = formatDate(r.date);
-        const stars = '\u2605'.repeat(r.score) + '\u2606'.repeat(5 - r.score);
-
-        return `
-          <div class="history-card">
-            <div>
-              <div style="font-size:13px"><strong>@${fromName}</strong></div>
-              <div class="history-meta">${stars} · ${dateStr}</div>
-            </div>
-            <div class="history-score ${cls}">${sign}${r.effectiveDelta}</div>
-          </div>`;
-      }).join('');
+      return;
     }
+
+    histEmpty.classList.add('hidden');
+    histContainer.innerHTML = history.map((r) => {
+      const fromUser = Credo.getUserById(r.from);
+      const fromName = fromUser ? fromUser.nickname : '???';
+      const cls = r.effectiveDelta > 0 ? 'positive'
+        : r.effectiveDelta < 0 ? 'negative' : 'neutral';
+      const sign = r.effectiveDelta > 0 ? '+' : '';
+      const dateStr = formatDate(r.date);
+      const stars = '\u2605'.repeat(r.score) + '\u2606'.repeat(5 - r.score);
+
+      return `
+        <div class="history-card">
+          <div>
+            <div style="font-size:13px"><strong>@${fromName}</strong></div>
+            <div class="history-meta">${stars} · ${dateStr}</div>
+          </div>
+          <div class="history-score ${cls}">${sign}${r.effectiveDelta}</div>
+        </div>`;
+    }).join('');
+  }
+
+  async function renderAdminTab() {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!currentUser || !_isAdmin(currentUser)) return;
+
+    const requestId = ++_adminStatsRequest;
+    const summary = $('#admin-summary');
+    const schoolsList = $('#admin-schools-list');
+    const schoolsEmpty = $('#admin-schools-empty');
+    const usersList = $('#admin-users-list');
+    const usersEmpty = $('#admin-users-empty');
+    const groupsList = $('#admin-groups-list');
+    const groupsEmpty = $('#admin-groups-empty');
+
+    if (summary) {
+      summary.innerHTML = `
+        <div class="admin-stat-card"><strong>...</strong><span>Загрузка</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>Пользователи</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>Группы</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>Сообщения</span></div>
+      `;
+    }
+
+    const result = typeof API !== 'undefined' && typeof API.adminStats === 'function'
+      ? await API.adminStats()
+      : { ok: false, error: 'admin_stats_unavailable' };
+
+    if (requestId !== _adminStatsRequest) return;
+
+    if (!result?.ok) {
+      if (summary) {
+        summary.innerHTML = '<div class="search-empty-state">Не удалось загрузить админ-статистику.</div>';
+      }
+      if (schoolsList) schoolsList.innerHTML = '';
+      if (usersList) usersList.innerHTML = '';
+      if (groupsList) groupsList.innerHTML = '';
+      if (schoolsEmpty) schoolsEmpty.classList.remove('hidden');
+      if (usersEmpty) usersEmpty.classList.remove('hidden');
+      if (groupsEmpty) groupsEmpty.classList.remove('hidden');
+      return;
+    }
+
+    const stats = result.summary || {};
+    if (summary) {
+      summary.innerHTML = [
+        ['Всего пользователей', stats.totalUsers ?? 0],
+        ['Одобрено', stats.approvedUsers ?? 0],
+        ['Ожидают', stats.pendingUsers ?? 0],
+        ['Отклонено', stats.rejectedUsers ?? 0],
+        ['Админы', stats.adminUsers ?? 0],
+        ['Группы', stats.totalGroups ?? 0],
+        ['Сообщения', stats.totalMessages ?? 0],
+        ['За 24 часа', stats.messages24h ?? 0],
+        ['Фото за 24 часа', stats.images24h ?? 0],
+        ['Инвайты', stats.pendingInvites ?? 0],
+      ].map(([label, value]) => `
+        <div class="admin-stat-card">
+          <strong>${escapeHtml(String(value))}</strong>
+          <span>${escapeHtml(String(label))}</span>
+        </div>
+      `).join('');
+    }
+
+    const schools = Array.isArray(result.schools) ? result.schools : [];
+    if (schools.length === 0) {
+      schoolsList.innerHTML = '';
+      schoolsEmpty.classList.remove('hidden');
+    } else {
+      schoolsEmpty.classList.add('hidden');
+      schoolsList.innerHTML = schools.map((school) => `
+        <div class="card">
+          ${Avatar.html({ seed: school.school, chars: 2 })}
+          <div class="card-body">
+            <div class="card-name">${escapeHtml(school.school)}</div>
+            <div class="card-sub">Всего: ${school.totalUsers} · Одобрено: ${school.approvedUsers} · Ожидают: ${school.pendingUsers}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    const recentUsers = Array.isArray(result.recentUsers) ? result.recentUsers : [];
+    if (recentUsers.length === 0) {
+      usersList.innerHTML = '';
+      usersEmpty.classList.remove('hidden');
+    } else {
+      usersEmpty.classList.add('hidden');
+      usersList.innerHTML = recentUsers.map((user) => `
+        <div class="card">
+          ${Avatar.html({ seed: user.nickname, imageUrl: user.avatarUrl || '' })}
+          <div class="card-body">
+            <div class="card-name">${escapeHtml(user.nickname)}
+              <span class="level-badge ${user.role === 'admin' ? 'trusted' : 'known'}">${user.role === 'admin' ? 'Admin' : user.status}</span>
+            </div>
+            <div class="card-sub">${escapeHtml(user.fullName || '')} · ${escapeHtml(user.school || '')} · ${formatDate(user.createdAt)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    const groups = Array.isArray(result.groups) ? result.groups : [];
+    if (groups.length === 0) {
+      groupsList.innerHTML = '';
+      groupsEmpty.classList.remove('hidden');
+    } else {
+      groupsEmpty.classList.add('hidden');
+      groupsList.innerHTML = groups.map((group) => `
+        <div class="card">
+          ${Avatar.html({ seed: group.name, imageUrl: group.avatarUrl || '', chars: 2 })}
+          <div class="card-body">
+            <div class="card-name">${escapeHtml(group.name)}
+              <span class="level-badge ${group.type === 'school_public' ? 'known' : 'trusted'}">${group.type === 'school_public' ? 'School' : 'Private'}</span>
+            </div>
+            <div class="card-sub">${escapeHtml(group.school || '')} · Участники: ${group.memberCount} · Админы: ${group.adminCount} · Сообщения: ${group.messageCount} · Фото: ${group.imageCount}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  function _getGroupMemberIdentity(groupId, userId) {
+    const group = Credo.getGroupById(groupId);
+    if (!group || !Array.isArray(group.members)) return null;
+    return group.members.find((member) => member.id === userId) || null;
+  }
+
+  function openUserProfile(userId, returnState = null) {
+    const viewer = Credo.getUserById(Credo.getCurrentUserId());
+    const user = Credo.getUserById(userId);
+    if (!viewer || !user) return;
+
+    currentProfileUser = userId;
+    _profileReturnState = returnState;
+
+    _renderProfileContent({
+      user,
+      avatarId: 'user-profile-avatar',
+      fullNameId: 'user-profile-fullname',
+      infoId: 'user-profile-info',
+      credValueId: 'user-profile-cred-value',
+      credLevelId: 'user-profile-cred-level',
+      credBarId: 'user-profile-cred-bar',
+      cardSelector: '#user-profile-card',
+      historyListId: 'user-rate-history',
+      historyEmptyId: 'user-rate-history-empty',
+    });
+
+    const actions = $('#user-profile-actions');
+    if (actions) {
+      if (user.id === viewer.id) {
+        actions.innerHTML = '<button class="btn btn-outline btn-small" type="button" data-open-own-profile>Мой профиль</button>';
+        const ownProfileBtn = actions.querySelector('[data-open-own-profile]');
+        if (ownProfileBtn) {
+          ownProfileBtn.addEventListener('click', () => {
+            showScreen('main');
+            const me = Credo.getUserById(Credo.getCurrentUserId());
+            if (me) renderMainScreen(me);
+            showTab('profile');
+          });
+        }
+      } else {
+        actions.innerHTML = `<button class="btn btn-primary btn-small" type="button" data-open-profile-chat="${user.id}">Написать</button>`;
+        const chatBtn = actions.querySelector('[data-open-profile-chat]');
+        if (chatBtn) {
+          chatBtn.addEventListener('click', () => openChat(chatBtn.dataset.openProfileChat));
+        }
+      }
+    }
+
+    showScreen('userProfile');
+  }
+
+  function closeUserProfile() {
+    const returnState = _profileReturnState;
+    currentProfileUser = null;
+    _profileReturnState = null;
+
+    if (returnState?.type === 'chat') {
+      showScreen('chat');
+      return;
+    }
+
+    if (returnState?.type === 'main') {
+      const me = Credo.getUserById(Credo.getCurrentUserId());
+      if (me) {
+        showScreen('main');
+        renderMainScreen(me);
+        showTab(returnState.tab || 'profile');
+        return;
+      }
+    }
+
+    refreshAll();
   }
 
   // --------------- Экран чата (имитация) ---------------
 
   function openChat(partnerId) {
+    currentChatGroup = null;
+    _clearPendingChatImage();
     currentChatPartner = partnerId;
     const me = Credo.getUserById(Credo.getCurrentUserId());
     const partner = Credo.getUserById(partnerId);
@@ -725,7 +1140,16 @@ const App = (() => {
 
     const level = Credo.getCredLevel(partner.cred);
 
+    $('#chat-partner-avatar').innerHTML = Avatar.html({
+      seed: partner.nickname,
+      imageUrl: partner.avatarUrl || '',
+    });
     $('#chat-partner-name').textContent = `@${partner.nickname}`;
+    const profileBtn = $('#chat-partner-profile-btn');
+    if (profileBtn) {
+      profileBtn.disabled = false;
+      profileBtn.onclick = () => openUserProfile(partner.id, { type: 'chat' });
+    }
 
     // Цветовая индикация уровня партнёра в шапке чата
     const credEl = $('#chat-partner-cred');
@@ -744,7 +1168,45 @@ const App = (() => {
       _updateNavBadges(me);
     }
 
-    renderChatMessages(me.id, partnerId);
+    renderChatMessages(me.id);
+    showScreen('chat');
+
+    if (_isBackendMode() && typeof API.syncNow === 'function') {
+      API.syncNow().catch(() => {});
+    }
+  }
+
+  function openGroupChat(groupId) {
+    currentChatPartner = null;
+    currentChatGroup = groupId;
+    _clearPendingChatImage();
+    const me = Credo.getUserById(Credo.getCurrentUserId());
+    const group = Credo.getGroupById(groupId);
+    if (!me || !group) return;
+
+    $('#chat-partner-avatar').innerHTML = Avatar.html({
+      seed: group.name,
+      imageUrl: group.avatarUrl || '',
+      chars: 2,
+    });
+    $('#chat-partner-name').textContent = group.name;
+    const profileBtn = $('#chat-partner-profile-btn');
+    if (profileBtn) {
+      profileBtn.disabled = true;
+      profileBtn.onclick = null;
+    }
+
+    const credEl = $('#chat-partner-cred');
+    credEl.textContent = group.type === 'school_public'
+      ? `${group.school} · Публичная группа`
+      : `${group.memberCount || (group.members || []).length} участников · Закрытая группа`;
+    credEl.className = `chat-header-cred ${group.type === 'school_public' ? 'known' : 'trusted'}`;
+
+    _resetChatStatus();
+    if (typeof Presence !== 'undefined') {
+      Presence.stopWatching();
+    }
+    renderChatMessages(me.id);
     showScreen('chat');
 
     if (_isBackendMode() && typeof API.syncNow === 'function') {
@@ -780,8 +1242,8 @@ const App = (() => {
     }
   }
 
-  function renderChatMessages(myId, partnerId) {
-    const msgs = Credo.getChatMessages(myId, partnerId);
+  function renderChatMessages(myId) {
+    const msgs = _getCurrentChatMessages(myId);
     const container = $('#chat-messages');
 
     if (msgs.length === 0) {
@@ -793,15 +1255,37 @@ const App = (() => {
     container.innerHTML = msgs.map(m => {
       const isMine = m.from === myId;
       const timeStr = formatTime(m.time);
+      const sender = m.groupId
+        ? (Credo.getUserById(m.from)
+          || (isMine ? Credo.getUserById(myId) : null)
+          || _getGroupMemberIdentity(m.groupId, m.from))
+        : null;
+      const showSender = Boolean(sender);
       return `
         <div class="msg ${isMine ? 'sent' : 'received'}">
-          <div class="msg-text">${escapeHtml(m.text)}</div>
+          ${showSender ? `
+            <div class="msg-author">
+              <button class="msg-author-avatar-btn" type="button" data-open-user-profile="${sender.id}" title="Открыть профиль">
+                ${Avatar.html({ seed: sender.nickname, imageUrl: sender.avatarUrl || '', extraClass: 'msg-author-avatar' })}
+              </button>
+              <button class="msg-author-name-btn" type="button" data-open-user-profile="${sender.id}" title="Открыть профиль">
+                <span class="msg-author-name">@${escapeHtml(sender.nickname)}</span>
+              </button>
+            </div>` : ''}
+          ${m.attachmentUrl ? `<a class="msg-image-link" href="${escapeHtml(m.attachmentUrl)}" target="_blank" rel="noopener noreferrer"><img class="msg-image" src="${escapeHtml(m.attachmentUrl)}" alt="attachment"></a>` : ''}
+          ${m.text ? `<div class="msg-text">${escapeHtml(m.text)}</div>` : ''}
           <div class="msg-footer">
             <div class="msg-actions"><button class="msg-react-btn" aria-label="Реакция" title="Добавить реакцию">+</button></div>
             <div class="msg-time">${timeStr}</div>
           </div>
         </div>`;
     }).join('');
+
+    container.querySelectorAll('[data-open-user-profile]').forEach((button) => {
+      button.addEventListener('click', () => {
+        openUserProfile(button.dataset.openUserProfile, { type: 'chat' });
+      });
+    });
 
     container.scrollTop = container.scrollHeight;
   }
@@ -810,40 +1294,179 @@ const App = (() => {
     const input = $('#chat-input');
     const sendButton = $('#chat-send-btn');
     const text = input.value.trim();
-    if (!text || !currentChatPartner) return;
+    if (!text && !_pendingChatImage) return;
+    if (!currentChatPartner && !currentChatGroup) return;
 
     const myId = Credo.getCurrentUserId();
     const partnerId = currentChatPartner;
+    const groupId = currentChatGroup;
 
     // Сбросить «печатает» до отправки
     clearTimeout(_typingDebounceTimer);
-    if (typeof Presence !== 'undefined') {
+    if (typeof Presence !== 'undefined' && partnerId) {
       Presence.setTyping(myId, partnerId, false);
     }
 
     if (sendButton) sendButton.disabled = true;
     input.disabled = true;
+    const attachButton = $('#chat-attach-btn');
+    if (attachButton) attachButton.disabled = true;
 
     let result;
     if (typeof API !== 'undefined' && typeof API.sendMessage === 'function') {
-      result = await API.sendMessage(myId, partnerId, text);
+      result = await API.sendMessage({
+        fromId: myId,
+        toId: partnerId,
+        groupId,
+        text,
+        file: _pendingChatImage?.file || null,
+        imageWidth: _pendingChatImage?.width || null,
+        imageHeight: _pendingChatImage?.height || null,
+      });
     } else {
-      Credo.sendMessage(myId, partnerId, text);
+      if (groupId) Credo.sendGroupMessage(groupId, myId, text);
+      else Credo.sendMessage(myId, partnerId, text);
       result = { ok: true };
     }
 
     if (sendButton) sendButton.disabled = false;
     input.disabled = false;
+    if (attachButton) attachButton.disabled = false;
 
     if (!result?.ok) {
-      renderChatMessages(myId, partnerId);
+      renderChatMessages(myId);
       alert('Send failed: ' + (result.error || 'unknown_error'));
       return;
     }
 
     input.value = '';
-    renderChatMessages(myId, partnerId);
+    _clearPendingChatImage();
+    renderChatMessages(myId);
     input.focus();
+  }
+
+  async function handleCreateGroup() {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    const name = ($('#group-name')?.value ?? '').trim();
+    const selected = [...$$('#group-members-picker input[type="checkbox"]:checked')].map((input) => input.value);
+
+    if (!currentUser) return;
+    if (!name) {
+      alert('Введите название группы');
+      return;
+    }
+
+    const result = await API.createGroup(name, selected);
+    if (!result?.ok) {
+      alert('Не удалось создать группу: ' + (result.error || 'unknown_error'));
+      return;
+    }
+
+    $('#group-name').value = '';
+    $$('#group-members-picker input[type="checkbox"]').forEach((input) => {
+      input.checked = false;
+    });
+    refreshAll();
+  }
+
+  async function handleChatImagePick(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const prepared = await _prepareChatImage(file);
+    if (!prepared.ok) {
+      alert(prepared.error);
+      event.target.value = '';
+      return;
+    }
+
+    _pendingChatImage = prepared;
+    _renderPendingChatImage();
+    event.target.value = '';
+  }
+
+  async function _prepareChatImage(file) {
+    const MAX_DIMENSION = 1600;
+    const MAX_BYTES = 6 * 1024 * 1024;
+
+    if (!file.type.startsWith('image/')) {
+      return { ok: false, error: 'Можно отправлять только изображения.' };
+    }
+
+    if (file.type === 'image/gif') {
+      if (file.size > MAX_BYTES) {
+        return { ok: false, error: 'GIF слишком большой. Сократите файл до 6 МБ.' };
+      }
+      return { ok: true, file, width: null, height: null, label: file.name, meta: `${Math.round(file.size / 1024)} КБ` };
+    }
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const ratio = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(1, Math.round(bitmap.width * ratio));
+      const height = Math.max(1, Math.round(bitmap.height * ratio));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/webp', 0.8);
+      });
+
+      const finalFile = blob
+        ? new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' })
+        : file;
+
+      if (finalFile.size > MAX_BYTES) {
+        return { ok: false, error: 'Изображение получилось слишком большим. Попробуйте фото меньшего размера.' };
+      }
+
+      return {
+        ok: true,
+        file: finalFile,
+        width,
+        height,
+        label: finalFile.name,
+        meta: `${width}×${height} · ${Math.round(finalFile.size / 1024)} КБ`,
+      };
+    } catch {
+      if (file.size > MAX_BYTES) {
+        return { ok: false, error: 'Файл слишком большой. Максимум 6 МБ.' };
+      }
+      return {
+        ok: true,
+        file,
+        width: null,
+        height: null,
+        label: file.name,
+        meta: `${Math.round(file.size / 1024)} КБ`,
+      };
+    }
+  }
+
+  function _renderPendingChatImage() {
+    const box = $('#chat-attachment-preview');
+    if (!box) return;
+
+    if (!_pendingChatImage) {
+      box.classList.add('hidden');
+      return;
+    }
+
+    $('#chat-attachment-name').textContent = _pendingChatImage.label;
+    $('#chat-attachment-meta').textContent = _pendingChatImage.meta;
+    box.classList.remove('hidden');
+  }
+
+  function _clearPendingChatImage() {
+    _pendingChatImage = null;
+    const box = $('#chat-attachment-preview');
+    if (box) box.classList.add('hidden');
   }
 
   // --------------- Экран оценки ---------------
@@ -1188,6 +1811,9 @@ const App = (() => {
     _chatSearchQuery   = '';
     _memberSearchQuery = '';
     _pendingPhone      = '';
+    _clearPendingChatImage();
+    currentChatPartner = null;
+    currentChatGroup = null;
     const searchChats   = $('#search-chats');
     const searchMembers = $('#search-members');
     if (searchChats)   searchChats.value   = '';
@@ -1220,20 +1846,34 @@ const App = (() => {
       return;
     }
 
-    if (_currentScreen === 'chat' && currentChatPartner) {
-      const partner = Credo.getUserById(currentChatPartner);
-      if (!partner) {
-        currentChatPartner = null;
-        route();
+    if (_currentScreen === 'chat') {
+      if (currentChatPartner) {
+        const partner = Credo.getUserById(currentChatPartner);
+        if (!partner) {
+          currentChatPartner = null;
+          route();
+          return;
+        }
+
+        renderChatMessages(user.id);
+        if (typeof Notif !== 'undefined') {
+          Notif.markChatRead(user.id, currentChatPartner);
+          _updateNavBadges(user);
+        }
         return;
       }
 
-      renderChatMessages(user.id, currentChatPartner);
-      if (typeof Notif !== 'undefined') {
-        Notif.markChatRead(user.id, currentChatPartner);
-        _updateNavBadges(user);
+      if (currentChatGroup) {
+        const group = Credo.getGroupById(currentChatGroup);
+        if (!group) {
+          currentChatGroup = null;
+          route();
+          return;
+        }
+
+        renderChatMessages(user.id);
+        return;
       }
-      return;
     }
 
     if (_currentScreen === 'main') {
@@ -1306,7 +1946,12 @@ const App = (() => {
 
     // Навигация по вкладкам
     $$('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', () => showTab(btn.dataset.tab));
+      btn.addEventListener('click', () => {
+        showTab(btn.dataset.tab);
+        if (btn.dataset.tab === 'admin') {
+          renderAdminTab().catch(() => {});
+        }
+      });
     });
 
     // Поиск по чатам
@@ -1348,17 +1993,23 @@ const App = (() => {
         Presence.stopWatching();
       }
       currentChatPartner = null;
+      currentChatGroup = null;
+      _clearPendingChatImage();
       _resetChatStatus();
       refreshAll();
     });
     $('#chat-send-btn').addEventListener('click', handleSendMessage);
+    $('#user-profile-back-btn').addEventListener('click', closeUserProfile);
+    $('#chat-attach-btn').addEventListener('click', () => $('#chat-image-input').click());
+    $('#chat-image-input').addEventListener('change', handleChatImagePick);
+    $('#chat-attachment-clear').addEventListener('click', _clearPendingChatImage);
     $('#chat-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleSendMessage();
     });
 
     // Индикатор «печатает…» с debounce 400 мс (активируется, гаснет через 2.5 с)
     $('#chat-input').addEventListener('input', () => {
-      if (!currentChatPartner || typeof Presence === 'undefined') return;
+      if (!currentChatPartner || currentChatGroup || typeof Presence === 'undefined') return;
       const myId = Credo.getCurrentUserId();
       if (!myId) return;
 
@@ -1375,6 +2026,7 @@ const App = (() => {
     $('#rate-notification-btn').addEventListener('click', openRateScreen);
     $('#rate-back-btn').addEventListener('click', () => refreshAll());
     $('#rate-submit-btn').addEventListener('click', submitRatings);
+    $('#create-group-btn').addEventListener('click', handleCreateGroup);
 
     // Демо
     $('#demo-user-select').addEventListener('change', () => handleDemoSwitch());

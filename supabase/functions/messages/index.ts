@@ -24,6 +24,7 @@
 
 import { ok, err, corsPrelight }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
+import { getGroupAccess }            from '../_shared/groups.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb }               from '../_shared/ratelimit.ts';
 import { isSameSchool }              from '../_shared/school.ts';
@@ -50,7 +51,7 @@ Deno.serve(async (req: Request) => {
   // Verify caller is approved
   const { data: caller } = await supabase
     .from('users')
-    .select('id, school, status')
+    .select('id, school, role, status')
     .eq('id', myId)
     .maybeSingle();
 
@@ -61,10 +62,12 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'GET') {
     const url       = new URL(req.url);
     const partnerId = url.searchParams.get('partnerId')?.trim();
+    const groupId   = url.searchParams.get('groupId')?.trim();
     const beforeRaw = url.searchParams.get('before');
     const limitRaw  = url.searchParams.get('limit');
 
-    if (!partnerId) return err('partnerId_required');
+    if (!partnerId && !groupId) return err('conversation_target_required');
+    if (partnerId && groupId) return err('conversation_target_conflict');
 
     // Validate cursor timestamp
     let before: string | null = null;
@@ -83,6 +86,45 @@ Deno.serve(async (req: Request) => {
         )
       : null;
 
+    if (groupId) {
+      const access = await getGroupAccess(supabase, groupId, myId, caller.role, caller.school);
+      if (!access.group || !access.canView) return err('group_not_found', 404);
+
+      let query = supabase
+        .from('messages')
+        .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
+        .eq('groupId', groupId);
+
+      if (paginate) {
+        query = query.order('time', { ascending: false }).limit(limit! + 1);
+        if (before) query = query.lt('time', before);
+      } else {
+        query = query.order('time', { ascending: true });
+      }
+
+      const { data: rows, error: fetchErr } = await query;
+      if (fetchErr) {
+        console.error('group messages fetch error:', fetchErr);
+        return err('fetch_failed', 500);
+      }
+
+      let messages: typeof rows;
+      let hasMore = false;
+
+      if (paginate) {
+        hasMore = rows.length > limit!;
+        messages = (hasMore ? rows.slice(0, limit!) : rows).reverse();
+      } else {
+        messages = rows;
+      }
+
+      return ok({
+        messages: await withSignedAttachmentUrls(supabase, messages),
+        markedRead: 0,
+        hasMore,
+      });
+    }
+
     // Verify partner exists, approved, same school
     const { data: partner } = await supabase
       .from('users')
@@ -97,7 +139,7 @@ Deno.serve(async (req: Request) => {
     // Build conversation query
     let query = supabase
       .from('messages')
-      .select('id, "fromId", "toId", text, time, "readAt"')
+      .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
       .or(
         `and("fromId".eq.${myId},"toId".eq.${partnerId}),` +
         `and("fromId".eq.${partnerId},"toId".eq.${myId})`,
@@ -137,7 +179,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return ok({
-      messages,
+      messages: await withSignedAttachmentUrls(supabase, messages),
       markedRead: Number(markedRead ?? 0),
       hasMore,
     });
@@ -150,18 +192,62 @@ Deno.serve(async (req: Request) => {
     const allowed = await rateLimitDb(supabase, ip, 'messages', 30, 60_000);
     if (!allowed) return err('rate_limit_exceeded', 429);
 
-    let body: { toId: string; text: string };
+    let body: {
+      toId?: string;
+      groupId?: string;
+      text?: string;
+      attachmentPath?: string;
+      attachmentMime?: string;
+      attachmentBytes?: number;
+      attachmentWidth?: number;
+      attachmentHeight?: number;
+    };
     try {
       body = await req.json();
     } catch {
       return err('invalid_json');
     }
 
-    const { toId, text } = body;
-    if (!toId?.trim())             return err('toId_required');
-    if (!text?.trim())             return err('text_required');
-    if (text.trim().length > 4000) return err('text_too_long');
-    if (myId === toId)             return err('cannot_message_self');
+    const toId = body.toId?.trim();
+    const groupId = body.groupId?.trim();
+    const text = String(body.text ?? '').trim();
+    const attachmentPath = body.attachmentPath?.trim();
+    const hasAttachment = Boolean(attachmentPath);
+
+    if (!toId && !groupId) return err('conversation_target_required');
+    if (toId && groupId) return err('conversation_target_conflict');
+    if (!text && !hasAttachment) return err('text_required');
+    if (text.length > 4000) return err('text_too_long');
+    if (toId && myId === toId) return err('cannot_message_self');
+
+    if (groupId) {
+      const access = await getGroupAccess(supabase, groupId, myId, caller.role, caller.school);
+      if (!access.group || !access.memberRole) return err('group_not_found', 404);
+
+      const { data: message, error: insertErr } = await supabase
+        .from('messages')
+        .insert({
+          fromId: myId,
+          groupId,
+          text: text || '',
+          type: hasAttachment ? 'image' : 'text',
+          attachmentPath: attachmentPath ?? null,
+          attachmentMime: body.attachmentMime ?? null,
+          attachmentBytes: body.attachmentBytes ?? null,
+          attachmentWidth: body.attachmentWidth ?? null,
+          attachmentHeight: body.attachmentHeight ?? null,
+        })
+        .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
+        .single();
+
+      if (insertErr || !message) {
+        console.error('group message insert error:', insertErr);
+        return err('send_failed', 500);
+      }
+
+      const [serialized] = await withSignedAttachmentUrls(supabase, [message]);
+      return ok({ message: serialized ?? message });
+    }
 
     // Verify recipient exists, approved, same school
     const { data: recipient } = await supabase
@@ -178,10 +264,16 @@ Deno.serve(async (req: Request) => {
       .from('messages')
       .insert({
         fromId: myId,
-        toId:   toId.trim(),
-        text:   text.trim(),
+        toId:   toId!.trim(),
+        text:   text || '',
+        type: hasAttachment ? 'image' : 'text',
+        attachmentPath: attachmentPath ?? null,
+        attachmentMime: body.attachmentMime ?? null,
+        attachmentBytes: body.attachmentBytes ?? null,
+        attachmentWidth: body.attachmentWidth ?? null,
+        attachmentHeight: body.attachmentHeight ?? null,
       })
-      .select('id, "fromId", "toId", text, time, "readAt"')
+      .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
       .single();
 
     if (insertErr || !message) {
@@ -189,8 +281,37 @@ Deno.serve(async (req: Request) => {
       return err('send_failed', 500);
     }
 
-    return ok({ message });
+    const [serialized] = await withSignedAttachmentUrls(supabase, [message]);
+    return ok({ message: serialized ?? message });
   }
 
   return err('method_not_allowed', 405);
 });
+
+async function withSignedAttachmentUrls(
+  supabase: ReturnType<typeof getServiceClient>,
+  messages: Array<Record<string, unknown>>,
+) {
+  const paths = messages
+    .map((message) => String(message.attachmentPath ?? ''))
+    .filter(Boolean);
+
+  if (!paths.length) return messages;
+
+  const uniquePaths = [...new Set(paths)];
+  const { data, error } = await supabase.storage
+    .from('chat-media')
+    .createSignedUrls(uniquePaths, 60 * 60);
+
+  if (error) {
+    console.error('signed urls error:', error);
+    return messages;
+  }
+
+  const urlMap = Object.fromEntries((data ?? []).map((item) => [item.path, item.signedUrl]));
+
+  return messages.map((message) => ({
+    ...message,
+    attachmentUrl: message.attachmentPath ? urlMap[String(message.attachmentPath)] ?? null : null,
+  }));
+}

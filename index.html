@@ -233,6 +233,9 @@
           <button class="nav-btn" type="button" data-tab="profile">
             <span class="nav-label">Профиль</span>
           </button>
+          <button id="nav-admin-btn" class="nav-btn hidden" type="button" data-tab="admin">
+            <span class="nav-label">Админ</span>
+          </button>
         </nav>
 
         <div class="main-grid">
@@ -259,6 +262,14 @@
                 <input id="search-chats" class="search-input" type="search" placeholder="Поиск по чатам">
               </div>
               <div id="chat-list" class="card-list"></div>
+              <div class="pane-head pane-head-split">
+                <div>
+                  <h3>Группы</h3>
+                  <p class="subtitle">Закрытые группы по приглашениям и школьный паблик.</p>
+                </div>
+              </div>
+              <div id="group-list-empty" class="search-empty-state">Пока нет доступных групп.</div>
+              <div id="group-list" class="card-list"></div>
             </section>
 
             <section id="tab-users" class="tab-pane hidden">
@@ -287,13 +298,37 @@
                   <div id="members-empty" class="search-empty-state">Пока нет доступных участников.</div>
                   <div id="members-list" class="card-list"></div>
                 </div>
+
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>Группы по приглашениям</h3>
+                      <p class="subtitle">Создайте закрытую группу, а участники присоединятся после принятия приглашения.</p>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="group-name">Название группы</label>
+                    <input id="group-name" type="text" placeholder="Например, Олимпиадная команда">
+                  </div>
+                  <div id="group-members-picker" class="group-members-picker"></div>
+                  <button id="create-group-btn" class="btn btn-primary btn-block" type="button">Создать группу</button>
+                  <div class="pane-head pane-head-split">
+                    <div>
+                      <h3>Приглашения</h3>
+                      <p class="subtitle">Только приглашённые участники видят закрытую группу.</p>
+                    </div>
+                  </div>
+                  <div id="group-invites-empty" class="search-empty-state">Приглашений пока нет.</div>
+                  <div id="group-invites-list" class="card-list"></div>
+                </div>
               </div>
             </section>
 
             <section id="tab-profile" class="tab-pane hidden">
               <div class="profile-grid">
                 <div class="profile-card novice">
-                  <div class="pane-head">
+                  <div class="user-profile-head">
+                    <div id="profile-avatar"></div>
                     <div>
                       <h3 id="profile-fullname">Имя</h3>
                       <p id="profile-info" class="subtitle">@nickname · school · class</p>
@@ -326,6 +361,55 @@
                 </div>
               </div>
             </section>
+
+            <section id="tab-admin" class="tab-pane hidden">
+              <div class="tab-content">
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>Админ-панель</h3>
+                      <p class="subtitle">Сводка по пользователям, группам и активности приложения.</p>
+                    </div>
+                  </div>
+                  <div id="admin-summary" class="admin-summary-grid"></div>
+                </div>
+
+                <div class="users-grid">
+                  <div class="pane-shell">
+                    <div class="pane-head">
+                      <div>
+                        <h3>Школы</h3>
+                        <p class="subtitle">Где сейчас больше всего участников и заявок.</p>
+                      </div>
+                    </div>
+                    <div id="admin-schools-empty" class="search-empty-state">Данных по школам пока нет.</div>
+                    <div id="admin-schools-list" class="card-list"></div>
+                  </div>
+
+                  <div class="pane-shell">
+                    <div class="pane-head">
+                      <div>
+                        <h3>Новые пользователи</h3>
+                        <p class="subtitle">Последние регистрации и статусы аккаунтов.</p>
+                      </div>
+                    </div>
+                    <div id="admin-users-empty" class="search-empty-state">Новых пользователей пока нет.</div>
+                    <div id="admin-users-list" class="card-list"></div>
+                  </div>
+                </div>
+
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>Группы</h3>
+                      <p class="subtitle">Состав и активность групп по всему приложению.</p>
+                    </div>
+                  </div>
+                  <div id="admin-groups-empty" class="search-empty-state">Групп пока нет.</div>
+                  <div id="admin-groups-list" class="card-list"></div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>
@@ -336,8 +420,11 @@
         <div class="chat-shell">
           <div class="chat-header">
             <button id="chat-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
+            <div id="chat-partner-avatar"></div>
             <div class="chat-header-info">
-              <div id="chat-partner-name" class="chat-header-name">@partner</div>
+              <button id="chat-partner-profile-btn" class="chat-header-name-btn" type="button">
+                <div id="chat-partner-name" class="chat-header-name">@partner</div>
+              </button>
               <div id="chat-partner-cred" class="chat-header-cred novice">Novice · Кредо 0</div>
               <div id="chat-header-status" class="chat-header-status"></div>
             </div>
@@ -345,9 +432,63 @@
 
           <div id="chat-messages" class="chat-messages"></div>
 
+          <div id="chat-attachment-preview" class="chat-attachment-preview hidden">
+            <div class="chat-attachment-copy">
+              <strong id="chat-attachment-name">Фото</strong>
+              <span id="chat-attachment-meta">Готово к отправке</span>
+            </div>
+            <button id="chat-attachment-clear" class="btn btn-outline btn-small" type="button">Убрать</button>
+          </div>
+
           <div class="chat-input-bar">
+            <input id="chat-image-input" type="file" accept="image/*" class="hidden">
+            <button id="chat-attach-btn" class="btn btn-outline" type="button">Фото</button>
             <input id="chat-input" type="text" autocomplete="off" placeholder="Напишите сообщение">
             <button id="chat-send-btn" class="btn btn-primary" type="button">Отправить</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-user-profile" class="screen hidden">
+      <div class="screen-shell">
+        <div class="profile-grid">
+          <div id="user-profile-card" class="profile-card novice">
+            <div class="pane-head">
+              <button id="user-profile-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
+            </div>
+            <div class="user-profile-head">
+              <div id="user-profile-avatar"></div>
+              <div>
+                <h3 id="user-profile-fullname">User</h3>
+                <p id="user-profile-info" class="subtitle">@nickname</p>
+              </div>
+            </div>
+            <div class="cred-display">
+              <div id="user-profile-cred-value" class="cred-big-value novice">0</div>
+              <div id="user-profile-cred-level" class="cred-level-label novice">Novice</div>
+              <div class="cred-bar-wrap">
+                <div id="user-profile-cred-bar" class="cred-bar novice"></div>
+              </div>
+              <div class="cred-bar-labels">
+                <span>Novice</span>
+                <span>Known</span>
+                <span>Trusted</span>
+                <span>Own</span>
+              </div>
+            </div>
+            <div id="user-profile-actions" class="user-profile-actions"></div>
+          </div>
+
+          <div class="pane-shell">
+            <div class="pane-head">
+              <div>
+                <h3>История оценок</h3>
+                <p class="subtitle">Последние изменения Credo этого участника.</p>
+              </div>
+            </div>
+            <div id="user-rate-history-empty" class="search-empty-state">Оценок пока нет.</div>
+            <div id="user-rate-history" class="card-list"></div>
           </div>
         </div>
       </div>

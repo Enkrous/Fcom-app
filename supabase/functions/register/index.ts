@@ -22,7 +22,8 @@ import { ok, err, corsPrelight } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
 import { signJWT }               from '../_shared/jwt.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
-import { isSameSchool, sanitizeSchoolName } from '../_shared/school.ts';
+import { ensureSchoolPublicGroup } from '../_shared/groups.ts';
+import { getCanonicalSchoolName, isSameSchool, sanitizeSchoolName } from '../_shared/school.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
@@ -114,7 +115,7 @@ Deno.serve(async (req: Request) => {
   const canonicalSchool =
     (knownSchools ?? []).find((row: { school: string | null }) =>
       row.school && isSameSchool(row.school, normalizedSchool),
-    )?.school ?? normalizedSchool;
+    )?.school ?? getCanonicalSchoolName(normalizedSchool);
 
   // ── 5. INSERT user — trigger auto_approve_first fires automatically ────────
   const { data: user, error: insertErr } = await supabase
@@ -141,6 +142,13 @@ Deno.serve(async (req: Request) => {
       if (insertErr.message?.includes('nickname')) return err('nickname_taken');
     }
     console.error('register insert error:', insertErr);
+    return err('registration_failed', 500);
+  }
+
+  try {
+    await ensureSchoolPublicGroup(supabase, user.school, user.id);
+  } catch (e) {
+    console.error('register school group sync error:', e);
     return err('registration_failed', 500);
   }
 

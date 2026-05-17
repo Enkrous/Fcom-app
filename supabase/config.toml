@@ -100,6 +100,12 @@ verify_jwt = false
 [functions.users]
 verify_jwt = false
 
+[functions.groups]
+verify_jwt = false
+
+[functions.upload-media]
+verify_jwt = false
+
 [functions.me]
 verify_jwt = false
 

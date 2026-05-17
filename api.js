@@ -142,6 +142,61 @@ const API = (() => {
     };
   }
 
+  async function _syncGroupsFromServer() {
+    const groupsRes = await _call('/groups');
+    if (!groupsRes.ok) {
+      return { ok: false, changed: false, error: groupsRes.error || 'groups_sync_failed' };
+    }
+
+    const groupsChanged = _writeJSONIfChanged('credo_groups', groupsRes.groups || []);
+    const invitesChanged = _writeJSONIfChanged('credo_group_invites', groupsRes.invites || []);
+
+    const groups = Array.isArray(groupsRes.groups) ? groupsRes.groups : [];
+    const existingGroupChats = JSON.parse(localStorage.getItem('credo_group_chats') || '{}');
+    let groupChatsChanged = false;
+
+    await Promise.allSettled(groups.map(async (group) => {
+      try {
+        const msgRes = await _call(`/messages?groupId=${encodeURIComponent(group.id)}`);
+        const nextMessages = (msgRes.ok && Array.isArray(msgRes.messages))
+          ? msgRes.messages.map((m) => ({
+              id: m.id,
+              from: m.fromId,
+              to: m.toId ?? null,
+              groupId: m.groupId ?? group.id,
+              text: m.text || '',
+              type: m.type || 'text',
+              attachmentPath: m.attachmentPath ?? null,
+              attachmentUrl: m.attachmentUrl ?? null,
+              attachmentMime: m.attachmentMime ?? null,
+              attachmentBytes: m.attachmentBytes ?? null,
+              attachmentWidth: m.attachmentWidth ?? null,
+              attachmentHeight: m.attachmentHeight ?? null,
+              time: m.time,
+              readAt: m.readAt ?? null,
+            }))
+          : [];
+
+        if (JSON.stringify(existingGroupChats[group.id] || []) !== JSON.stringify(nextMessages)) {
+          existingGroupChats[group.id] = nextMessages;
+          groupChatsChanged = true;
+        }
+      } catch { /* ignore individual group fetch failure */ }
+    }));
+
+    if (groupChatsChanged) {
+      localStorage.setItem('credo_group_chats', JSON.stringify(existingGroupChats));
+    }
+
+    return {
+      ok: true,
+      changed: groupsChanged || invitesChanged || groupChatsChanged,
+      groupsChanged,
+      invitesChanged,
+      groupChatsChanged,
+    };
+  }
+
   // ─── SYNC: populate localStorage from server ──────────────────────
   // Called after login and on each page load when a token exists.
   // Writes into the same localStorage keys that credo.js reads, so all
@@ -197,7 +252,15 @@ const API = (() => {
               id: m.id,
               from: m.fromId,
               to: m.toId,
+              groupId: m.groupId ?? null,
               text: m.text,
+              type: m.type || 'text',
+              attachmentPath: m.attachmentPath ?? null,
+              attachmentUrl: m.attachmentUrl ?? null,
+              attachmentMime: m.attachmentMime ?? null,
+              attachmentBytes: m.attachmentBytes ?? null,
+              attachmentWidth: m.attachmentWidth ?? null,
+              attachmentHeight: m.attachmentHeight ?? null,
               time: m.time,
               readAt: m.readAt ?? null,
             }))
@@ -265,10 +328,14 @@ const API = (() => {
         return meResult;
       }
 
-      const serverResult = await _syncFromServer(meResult.user);
+      const [serverResult, groupsResult] = await Promise.all([
+        _syncFromServer(meResult.user),
+        _syncGroupsFromServer(),
+      ]);
       return {
-        ...serverResult,
-        changed: Boolean(meResult.changed || serverResult.changed),
+        ok: serverResult.ok && groupsResult.ok,
+        error: serverResult.error || groupsResult.error,
+        changed: Boolean(meResult.changed || serverResult.changed || groupsResult.changed),
       };
     })()
       .then((result) => {
@@ -538,11 +605,200 @@ const API = (() => {
     return Credo.rejectUser(userId);
   }
 
-  async function sendMessage(fromId, toId, text) {
+  async function createGroup(name, memberIds) {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
     if (!FUNCTIONS_BASE) {
+      return Credo.createGroup(name, currentUser?.school || '', currentUser?.id, memberIds);
+    }
+
+    const result = await _call('/groups', {
+      method: 'POST',
+      body: {
+        action: 'create',
+        name,
+        memberIds,
+      },
+    });
+
+    if (result.ok) {
+      await syncNow().catch(() => {});
+    }
+
+    return result;
+  }
+
+  async function respondGroupInvite(inviteId, decision) {
+    if (!FUNCTIONS_BASE) {
+      return Credo.respondGroupInvite(inviteId, Credo.getCurrentUserId(), decision);
+    }
+
+    const result = await _call('/groups', {
+      method: 'POST',
+      body: {
+        action: 'respond_invite',
+        inviteId,
+        decision,
+      },
+    });
+
+    if (result.ok) {
+      await syncNow().catch(() => {});
+    }
+
+    return result;
+  }
+
+  async function leaveGroup(groupId) {
+    if (!FUNCTIONS_BASE) return { ok: false, error: 'not_supported_local' };
+
+    const result = await _call('/groups', {
+      method: 'POST',
+      body: {
+        action: 'leave',
+        groupId,
+      },
+    });
+
+    if (result.ok) {
+      await syncNow().catch(() => {});
+    }
+
+    return result;
+  }
+
+  async function adminStats() {
+    if (!FUNCTIONS_BASE) {
+      const users = Credo.getUsers();
+      const groups = Credo.getGroups();
+      const directChats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      const groupChats = JSON.parse(localStorage.getItem('credo_group_chats') || '{}');
+      const allMessages = [
+        ...Object.values(directChats).flat(),
+        ...Object.values(groupChats).flat(),
+      ];
+
+      return {
+        ok: true,
+        summary: {
+          totalUsers: users.length,
+          approvedUsers: users.filter((user) => user.status === 'approved').length,
+          pendingUsers: users.filter((user) => user.status === 'pending').length,
+          rejectedUsers: users.filter((user) => user.status === 'rejected').length,
+          adminUsers: users.filter((user) => user.role === 'admin').length,
+          totalMessages: allMessages.length,
+          messages24h: allMessages.filter((message) => Date.now() - new Date(message.time).getTime() <= 24 * 60 * 60 * 1000).length,
+          images24h: allMessages.filter((message) => message.type === 'image' && Date.now() - new Date(message.time).getTime() <= 24 * 60 * 60 * 1000).length,
+          totalGroups: groups.length,
+          publicGroups: groups.filter((group) => group.type === 'school_public').length,
+          privateGroups: groups.filter((group) => group.type === 'private').length,
+          pendingInvites: Credo.getGroupInvites().length,
+        },
+        schools: [],
+        recentUsers: [...users].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 12),
+        groups,
+      };
+    }
+
+    try {
+      return await _call('/admin-stats');
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+  }
+
+  async function uploadMedia(file, width = null, height = null) {
+    if (!FUNCTIONS_BASE) {
+      return { ok: false, error: 'not_supported_local' };
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (width) formData.append('width', String(width));
+    if (height) formData.append('height', String(height));
+
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    let res, data;
+    try {
+      res = await fetch(`${FUNCTIONS_BASE}/upload-media`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      data = await res.json();
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    return data;
+  }
+
+  async function sendMessage(payloadOrFromId, maybeToId, maybeText) {
+    const payload = typeof payloadOrFromId === 'object' && payloadOrFromId !== null
+      ? payloadOrFromId
+      : { fromId: payloadOrFromId, toId: maybeToId, text: maybeText };
+
+    const {
+      fromId,
+      toId = null,
+      groupId = null,
+      text = '',
+      file = null,
+    } = payload;
+
+    if (!FUNCTIONS_BASE) {
+      if (groupId) {
+        Credo.sendGroupMessage(groupId, fromId, text);
+        const messages = Credo.getGroupMessages(groupId);
+        return { ok: true, message: messages[messages.length - 1] || null };
+      }
       Credo.sendMessage(fromId, toId, text);
       const messages = Credo.getChatMessages(fromId, toId);
       return { ok: true, message: messages[messages.length - 1] || null };
+    }
+
+    if (groupId || file) {
+      let media = null;
+      if (file) {
+        const uploadResult = await uploadMedia(file, payload.imageWidth, payload.imageHeight);
+        if (!uploadResult.ok) return uploadResult;
+        media = uploadResult.media;
+      }
+
+      const body = {
+        toId,
+        groupId,
+        text,
+        attachmentPath: media?.path || null,
+        attachmentMime: media?.mime || null,
+        attachmentBytes: media?.bytes || null,
+        attachmentWidth: media?.width || null,
+        attachmentHeight: media?.height || null,
+      };
+
+      const sendGroupPayload = async () => {
+        try {
+          return await _call('/messages', {
+          method: 'POST',
+          body,
+        });
+        } catch {
+          return { ok: false, error: 'network_error' };
+        }
+      };
+
+      let result = await sendGroupPayload();
+      if (!result?.ok && result?.error === 'group_not_found') {
+        await syncNow().catch(() => {});
+        result = await sendGroupPayload();
+      }
+
+      if (result?.ok) {
+        await syncNow().catch(() => {});
+      }
+      return result;
     }
 
     const originalSend = _origSendMessage || Credo.sendMessage.bind(Credo);
@@ -613,6 +869,11 @@ const API = (() => {
     verifyPhone,
     resendOtp,
     sendMessage,
+    createGroup,
+    respondGroupInvite,
+    leaveGroup,
+    uploadMedia,
+    adminStats,
     syncNow,
     startLiveSync,
     stopLiveSync,

@@ -38,6 +38,15 @@ const Credo = (() => {
   function getChats()    { return loadJSON('credo_chats', {}); }
   function saveChats(c)  { saveJSON('credo_chats', c); }
 
+  function getGroups()        { return loadJSON('credo_groups', []); }
+  function saveGroups(groups) { saveJSON('credo_groups', groups); }
+
+  function getGroupInvites()       { return loadJSON('credo_group_invites', []); }
+  function saveGroupInvites(data)  { saveJSON('credo_group_invites', data); }
+
+  function getGroupChats()      { return loadJSON('credo_group_chats', {}); }
+  function saveGroupChats(data) { saveJSON('credo_group_chats', data); }
+
   function getDeviceAccountIds() {
     const ids = loadJSON('credo_device_accounts', null);
     if (Array.isArray(ids) && ids.length > 0) {
@@ -194,16 +203,25 @@ const Credo = (() => {
     return chats[chatKey(id1, id2)] || [];
   }
 
-  function sendMessage(fromId, toId, text) {
+  function sendMessage(fromId, toId, text, extra) {
+    extra = extra || {};
     const chats = getChats();
     const key = chatKey(fromId, toId);
     if (!chats[key]) chats[key] = [];
     chats[key].push({
-      id: generateId(),
+      id: extra.id || generateId(),
       from: fromId,
       to: toId,
+      groupId: null,
       text,
-      time: new Date().toISOString(),
+      type: extra.type || (extra.attachmentPath ? 'image' : 'text'),
+      attachmentPath: extra.attachmentPath || null,
+      attachmentUrl: extra.attachmentUrl || null,
+      attachmentMime: extra.attachmentMime || null,
+      attachmentBytes: extra.attachmentBytes || null,
+      attachmentWidth: extra.attachmentWidth || null,
+      attachmentHeight: extra.attachmentHeight || null,
+      time: extra.time || new Date().toISOString(),
       readAt: null,
     });
     saveChats(chats);
@@ -217,6 +235,131 @@ const Credo = (() => {
       }
     });
     saveUsers(users);
+  }
+
+  function getGroupById(groupId) {
+    return getGroups().find(group => group.id === groupId) || null;
+  }
+
+  function getGroupMessages(groupId) {
+    const chats = getGroupChats();
+    return chats[groupId] || [];
+  }
+
+  function sendGroupMessage(groupId, fromId, text, extra) {
+    extra = extra || {};
+    const chats = getGroupChats();
+    if (!chats[groupId]) chats[groupId] = [];
+    chats[groupId].push({
+      id: extra.id || generateId(),
+      from: fromId,
+      to: null,
+      groupId,
+      text,
+      type: extra.type || (extra.attachmentPath ? 'image' : 'text'),
+      attachmentPath: extra.attachmentPath || null,
+      attachmentUrl: extra.attachmentUrl || null,
+      attachmentMime: extra.attachmentMime || null,
+      attachmentBytes: extra.attachmentBytes || null,
+      attachmentWidth: extra.attachmentWidth || null,
+      attachmentHeight: extra.attachmentHeight || null,
+      time: extra.time || new Date().toISOString(),
+      readAt: null,
+    });
+    saveGroupChats(chats);
+  }
+
+  function createGroup(name, school, creatorId, memberIds) {
+    const creator = getUserById(creatorId);
+    if (!creator) return { ok: false, error: 'creator_not_found' };
+
+    const group = {
+      id: 'g_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name,
+      school,
+      type: 'private',
+      createdBy: creatorId,
+      createdAt: new Date().toISOString(),
+      members: [{
+        id: creator.id,
+        nickname: creator.nickname,
+        fullName: creator.fullName,
+        school: creator.school,
+        status: creator.status,
+        avatarUrl: creator.avatarUrl || null,
+        role: 'admin',
+      }],
+      memberCount: 1,
+      myRole: 'admin',
+      canManage: true,
+    };
+
+    const groups = getGroups();
+    groups.push(group);
+    saveGroups(groups);
+
+    const invites = getGroupInvites();
+    (memberIds || []).forEach((memberId) => {
+      const invitedUser = getUserById(memberId);
+      if (!invitedUser || invitedUser.id === creatorId) return;
+      invites.push({
+        id: 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        createdAt: new Date().toISOString(),
+        group: {
+          id: group.id,
+          name: group.name,
+          school: group.school,
+          type: group.type,
+        },
+        invitedBy: {
+          id: creator.id,
+          nickname: creator.nickname,
+          fullName: creator.fullName,
+        },
+        invitedUserId: invitedUser.id,
+      });
+    });
+    saveGroupInvites(invites);
+
+    return { ok: true, group };
+  }
+
+  function respondGroupInvite(inviteId, currentUserId, decision) {
+    const invites = getGroupInvites();
+    const inviteIndex = invites.findIndex((invite) => invite.id === inviteId);
+    if (inviteIndex === -1) return { ok: false, error: 'invite_not_found' };
+
+    const invite = invites[inviteIndex];
+    if (invite.invitedUserId && invite.invitedUserId !== currentUserId) {
+      return { ok: false, error: 'forbidden' };
+    }
+
+    invites.splice(inviteIndex, 1);
+    saveGroupInvites(invites);
+
+    if (decision !== 'accept') return { ok: true };
+
+    const groups = getGroups();
+    const group = groups.find((item) => item.id === invite.group?.id);
+    const user = getUserById(currentUserId);
+    if (!group || !user) return { ok: false, error: 'group_not_found' };
+
+    if (!Array.isArray(group.members)) group.members = [];
+    if (!group.members.some((member) => member.id === currentUserId)) {
+      group.members.push({
+        id: user.id,
+        nickname: user.nickname,
+        fullName: user.fullName,
+        school: user.school,
+        status: user.status,
+        avatarUrl: user.avatarUrl || null,
+        role: 'member',
+      });
+      group.memberCount = group.members.length;
+    }
+    saveGroups(groups);
+
+    return { ok: true, group };
   }
 
   /** Проверяет, был ли диалог между двумя пользователями */
@@ -396,6 +539,9 @@ const Credo = (() => {
     localStorage.removeItem('credo_users');
     localStorage.removeItem('credo_rate_log');
     localStorage.removeItem('credo_chats');
+    localStorage.removeItem('credo_groups');
+    localStorage.removeItem('credo_group_invites');
+    localStorage.removeItem('credo_group_chats');
     localStorage.removeItem('credo_device_accounts');
     localStorage.removeItem('credo_blocked');
     localStorage.removeItem('credo_current_user');
@@ -423,6 +569,13 @@ const Credo = (() => {
     // Чаты
     getChatMessages,
     sendMessage,
+    getGroupMessages,
+    sendGroupMessage,
+    getGroups,
+    getGroupById,
+    getGroupInvites,
+    createGroup,
+    respondGroupInvite,
     hadConversation,
     chatKey,
 
