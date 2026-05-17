@@ -18,6 +18,7 @@
 import { ok, err, corsPrelight }      from '../_shared/response.ts';
 import { getServiceClient }           from '../_shared/db.ts';
 import { requireAuthWithRevocation }  from '../_shared/jwt.ts';
+import { isSameSchool }               from '../_shared/school.ts';
 
 const PUBLIC_USER_FIELDS = 'id, "fullName", school, grade, nickname, "phoneVerified", status, cred, "createdAt", "avatarUrl"';
 
@@ -51,11 +52,13 @@ Deno.serve(async (req: Request) => {
   const url          = new URL(req.url);
   const rateTargets  = url.searchParams.get('rateTargets') === 'true';
 
-  // Fetch approved users in the same school (excluding caller)
+  // Fetch approved users and filter by normalized school key in JS.
+  // We intentionally do not use `.eq('school', caller.school)` because the UI
+  // collects free-form school names, so casing / extra spaces would split
+  // people from the same real school into separate invisible groups.
   const { data: approvedUsers, error: approvedErr } = await supabase
     .from('users')
     .select(PUBLIC_USER_FIELDS)
-    .eq('school', caller.school)
     .eq('status', 'approved')
     .neq('id', myId)
     .order('cred', { ascending: false });
@@ -65,11 +68,10 @@ Deno.serve(async (req: Request) => {
     return err('fetch_failed', 500);
   }
 
-  // Fetch pending users in the same school (for approval flow)
+  // Same normalized-school filtering for pending users.
   const { data: pendingUsers, error: pendingErr } = await supabase
     .from('users')
     .select(PUBLIC_USER_FIELDS)
-    .eq('school', caller.school)
     .eq('status', 'pending')
     .order('createdAt', { ascending: true });
 
@@ -78,7 +80,12 @@ Deno.serve(async (req: Request) => {
     return err('fetch_failed', 500);
   }
 
-  let users = approvedUsers ?? [];
+  let users = (approvedUsers ?? []).filter((user: { school: string }) =>
+    isSameSchool(user.school, caller.school),
+  );
+  const pending = (pendingUsers ?? []).filter((user: { school: string }) =>
+    isSameSchool(user.school, caller.school),
+  );
 
   // If rateTargets=true, filter to only users the caller can rate
   // (had conversation + no rating in last 24h)
@@ -119,6 +126,6 @@ Deno.serve(async (req: Request) => {
 
   return ok({
     users,
-    pending: pendingUsers ?? [],
+    pending,
   });
 });

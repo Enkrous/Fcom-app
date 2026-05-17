@@ -22,6 +22,7 @@ import { ok, err, corsPrelight } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
 import { signJWT }               from '../_shared/jwt.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
+import { isSameSchool, sanitizeSchoolName } from '../_shared/school.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
@@ -45,10 +46,11 @@ Deno.serve(async (req: Request) => {
   }
 
   const { fullName, school, grade, nickname, phone = '', deviceFingerprint = '' } = body;
+  const normalizedSchool = sanitizeSchoolName(school);
 
   // ── 1. Validate required fields ──────────────────────────────────────────
   if (!fullName?.trim()) return err('fullName_required');
-  if (!school?.trim())   return err('school_required');
+  if (!normalizedSchool) return err('school_required');
   if (!grade?.trim())    return err('grade_required');
   if (!nickname?.trim()) return err('nickname_required');
 
@@ -99,12 +101,27 @@ Deno.serve(async (req: Request) => {
 
   if (existingName) return err('fullName_taken');
 
+  const { data: knownSchools, error: schoolLookupErr } = await supabase
+    .from('users')
+    .select('school')
+    .not('school', 'is', null);
+
+  if (schoolLookupErr) {
+    console.error('register school lookup error:', schoolLookupErr);
+    return err('registration_failed', 500);
+  }
+
+  const canonicalSchool =
+    (knownSchools ?? []).find((row: { school: string | null }) =>
+      row.school && isSameSchool(row.school, normalizedSchool),
+    )?.school ?? normalizedSchool;
+
   // ── 5. INSERT user — trigger auto_approve_first fires automatically ────────
   const { data: user, error: insertErr } = await supabase
     .from('users')
     .insert({
       fullName:      fullName.trim(),
-      school:        school.trim(),
+      school:        canonicalSchool,
       grade:         grade.trim(),
       nickname:      nickname.trim(),
       phone:         phone.trim() || null,

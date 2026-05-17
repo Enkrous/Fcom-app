@@ -26,6 +26,7 @@ import { ok, err, corsPrelight }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb }               from '../_shared/ratelimit.ts';
+import { isSameSchool }              from '../_shared/school.ts';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT     = 100;
@@ -89,9 +90,9 @@ Deno.serve(async (req: Request) => {
       .eq('id', partnerId)
       .maybeSingle();
 
-    if (!partner)                         return err('partner_not_found', 404);
-    if (partner.school !== caller.school) return err('cross_school_forbidden', 403);
-    if (partner.status !== 'approved')    return err('partner_not_approved');
+    if (!partner)                              return err('partner_not_found', 404);
+    if (!isSameSchool(partner.school, caller.school)) return err('cross_school_forbidden', 403);
+    if (partner.status !== 'approved')         return err('partner_not_approved');
 
     // Build conversation query
     let query = supabase
@@ -169,9 +170,9 @@ Deno.serve(async (req: Request) => {
       .eq('id', toId)
       .maybeSingle();
 
-    if (!recipient)                           return err('recipient_not_found', 404);
-    if (recipient.school !== caller.school)   return err('cross_school_forbidden', 403);
-    if (recipient.status !== 'approved')      return err('recipient_not_approved');
+    if (!recipient)                                return err('recipient_not_found', 404);
+    if (!isSameSchool(recipient.school, caller.school)) return err('cross_school_forbidden', 403);
+    if (recipient.status !== 'approved')           return err('recipient_not_approved');
 
     const { data: message, error: insertErr } = await supabase
       .from('messages')
