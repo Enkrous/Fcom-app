@@ -154,6 +154,7 @@ const Credo = (() => {
       school,
       grade,
       nickname,
+      role: 'member',
       status: hasApproved ? 'pending' : 'approved',
       cred: hasApproved ? 0 : 1,
       ratings: [],

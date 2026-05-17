@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
   // ── Find user by nickname (case-insensitive) ──────────────────────────────
   const { data: user } = await supabase
     .from('users')
-    .select('id, "fullName", school, grade, nickname, phone, "phoneVerified", "passwordHash", status, cred, "createdAt"')
+    .select('id, "fullName", school, grade, nickname, phone, "phoneVerified", "passwordHash", role, status, cred, "createdAt"')
     .ilike('nickname', nickname.trim())
     .maybeSingle();
 
@@ -104,6 +104,7 @@ Deno.serve(async (req: Request) => {
       nickname: user.nickname,
       status:   user.status,
       school:   user.school,
+      role:     user.role,
     },
     jwtSecret,
   );

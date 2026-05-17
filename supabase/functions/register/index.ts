@@ -126,10 +126,11 @@ Deno.serve(async (req: Request) => {
       nickname:      nickname.trim(),
       phone:         phone.trim() || null,
       phoneVerified: false,
+      role:          'member',
       status:        'pending',   // trigger overrides to 'approved' for first user in school
       cred:          0,
     })
-    .select('id, "fullName", school, grade, nickname, phone, "phoneVerified", status, cred, "createdAt"')
+    .select('id, "fullName", school, grade, nickname, phone, "phoneVerified", role, status, cred, "createdAt"')
     .single();
 
   if (insertErr || !user) {

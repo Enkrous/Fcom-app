@@ -41,6 +41,7 @@ const API = (() => {
   function setToken(t)    { t ? localStorage.setItem(TOKEN_KEY, t)     : localStorage.removeItem(TOKEN_KEY); }
   function getRegToken()  { return localStorage.getItem(REG_TOKEN_KEY); }
   function setRegToken(t) { t ? localStorage.setItem(REG_TOKEN_KEY, t) : localStorage.removeItem(REG_TOKEN_KEY); }
+  function hasSessionToken() { return Boolean(getToken() || getRegToken()); }
 
   // ─── DEVICE FINGERPRINT ───────────────────────────────────────────
   async function getDeviceFingerprint() {
@@ -93,6 +94,52 @@ const API = (() => {
     if (prev === next) return false;
     localStorage.setItem(key, next);
     return true;
+  }
+
+  function _mergeCurrentUser(user, extra = {}) {
+    if (!user?.id) return null;
+
+    const users = Credo.getUsers();
+    const index = users.findIndex((item) => item.id === user.id);
+    const existing = index >= 0 ? users[index] : {};
+    const merged = {
+      ratings: Array.isArray(existing.ratings) ? existing.ratings : [],
+      chats: Array.isArray(existing.chats) ? existing.chats : [],
+      ...(existing.passwordHash ? { passwordHash: existing.passwordHash } : {}),
+      ...existing,
+      ...user,
+      ...extra,
+    };
+
+    if (index >= 0) users[index] = merged;
+    else users.push(merged);
+
+    localStorage.setItem('credo_users', JSON.stringify(users));
+    return merged;
+  }
+
+  async function _syncCurrentUser() {
+    const meRes = await _call('/me', { useRegToken: true });
+    if (!meRes.ok || !meRes.user) {
+      return { ok: false, changed: false, error: meRes.error || 'sync_failed' };
+    }
+
+    const currentId = Credo.getCurrentUserId();
+    const previous = currentId ? Credo.getUserById(currentId) : null;
+    const merged = _mergeCurrentUser(meRes.user);
+    const changed = JSON.stringify(previous) !== JSON.stringify(merged);
+
+    if (merged?.id) {
+      Credo.setCurrentUserId(merged.id);
+      Credo.markDeviceAccount(merged.id);
+    }
+
+    return {
+      ok: true,
+      changed,
+      user: merged,
+      canApprove: Boolean(meRes.canApprove),
+    };
   }
 
   // ─── SYNC: populate localStorage from server ──────────────────────
@@ -197,7 +244,7 @@ const API = (() => {
   //      (synchronous, so app.js view rendering works unchanged)
   //   2. Fires the backend call as a background side-effect (fire-and-forget)
   async function syncNow() {
-    if (!FUNCTIONS_BASE || !getToken()) {
+    if (!FUNCTIONS_BASE || !hasSessionToken()) {
       return { ok: false, changed: false, error: 'not_authenticated' };
     }
 
@@ -209,7 +256,21 @@ const API = (() => {
       return { ok: false, changed: false, error: 'missing_current_user' };
     }
 
-    _syncInFlight = _syncFromServer(currentUser)
+    _syncInFlight = (async () => {
+      const meResult = await _syncCurrentUser();
+      if (!meResult.ok || !meResult.user) return meResult;
+
+      const hasLoginToken = Boolean(getToken());
+      if (!hasLoginToken || meResult.user.status !== 'approved') {
+        return meResult;
+      }
+
+      const serverResult = await _syncFromServer(meResult.user);
+      return {
+        ...serverResult,
+        changed: Boolean(meResult.changed || serverResult.changed),
+      };
+    })()
       .then((result) => {
         if (result?.ok && result.changed) _emitSync(result);
         return result;
@@ -222,7 +283,7 @@ const API = (() => {
   }
 
   function startLiveSync() {
-    if (!FUNCTIONS_BASE || !getToken()) return;
+    if (!FUNCTIONS_BASE || !hasSessionToken()) return;
     stopLiveSync();
     _syncTimer = setInterval(() => {
       syncNow().catch(() => {});
@@ -240,8 +301,18 @@ const API = (() => {
     // approveUser
     const _origApprove = Credo.approveUser.bind(Credo);
     Credo.approveUser = function(userId) {
+      const before = Credo.getUserById(userId);
       const result = _origApprove(userId);
       _call('/approve', { method: 'POST', body: { userId } })
+        .then((res) => {
+          if (!res?.ok && before) {
+            Credo.updateUser(userId, {
+              status: before.status,
+              cred: before.cred,
+            });
+            _emitSync({ ok: false, changed: true, error: res.error || 'approve_failed' });
+          }
+        })
         .catch(e => console.warn('[API] approve backend error:', e));
       return result;
     };
@@ -249,9 +320,16 @@ const API = (() => {
     // rejectUser — also sends device fingerprint for device blocking
     const _origReject = Credo.rejectUser.bind(Credo);
     Credo.rejectUser = function(userId) {
+      const before = Credo.getUserById(userId);
       const result = _origReject(userId);
       getDeviceFingerprint()
         .then(fp => _call('/reject', { method: 'POST', body: { userId, deviceFingerprint: fp } }))
+        .then((res) => {
+          if (!res?.ok && before) {
+            Credo.updateUser(userId, { status: before.status });
+            _emitSync({ ok: false, changed: true, error: res.error || 'reject_failed' });
+          }
+        })
         .catch(e => console.warn('[API] reject backend error:', e));
       return result;
     };
@@ -308,18 +386,11 @@ const API = (() => {
 
     // Store the registration JWT so /set-password can be called immediately
     if (result.token) setRegToken(result.token);
-
-    // Add user to localStorage cache (same structure Credo expects)
-    const existingUsers = Credo.getUsers();
-    if (!existingUsers.find(u => u.id === user.id)) {
-      localStorage.setItem('credo_users', JSON.stringify([
-        ...existingUsers,
-        { ratings: [], chats: [], ...user },
-      ]));
-    }
+    _mergeCurrentUser(user);
 
     Credo.setCurrentUserId(user.id);
     Credo.markDeviceAccount(user.id);
+    startLiveSync();
     return result;
   }
 
@@ -347,9 +418,17 @@ const API = (() => {
 
     // Mark password as set locally (sentinel avoids storing hash client-side)
     Credo.updateUser(userId, { passwordHash: '__set__' });
-    setRegToken(null);
 
-    return result;
+    const currentUser = Credo.getUserById(userId);
+    if (!currentUser?.nickname) return result;
+
+    const loginResult = await login(currentUser.nickname, password);
+    if (!loginResult.ok) {
+      return { ok: false, error: loginResult.error || 'login_after_set_password_failed' };
+    }
+
+    setRegToken(null);
+    return { ...result, token: loginResult.token, user: loginResult.user };
   }
 
   // ─── API.login ────────────────────────────────────────────────────
@@ -383,19 +462,7 @@ const API = (() => {
     setToken(result.token);
     Credo.setCurrentUserId(result.user.id);
     Credo.markDeviceAccount(result.user.id);
-    const cachedUsers = Credo.getUsers();
-    const existingIndex = cachedUsers.findIndex(u => u.id === result.user.id);
-    const seededUser = {
-      ratings: [],
-      chats: [],
-      passwordHash: '__set__',
-      ...(existingIndex >= 0 ? cachedUsers[existingIndex] : {}),
-      ...result.user,
-    };
-
-    if (existingIndex >= 0) cachedUsers[existingIndex] = seededUser;
-    else cachedUsers.push(seededUser);
-    localStorage.setItem('credo_users', JSON.stringify(cachedUsers));
+    const seededUser = _mergeCurrentUser(result.user, { passwordHash: '__set__' });
 
     await _syncFromServer(seededUser);
     Credo.updateUser(result.user.id, { passwordHash: '__set__' });
@@ -518,8 +585,7 @@ const API = (() => {
     // On page load with an existing session: re-sync data from server.
     // This runs in the background — app.js will use the cached localStorage
     // data immediately; the UI will reflect server data on next route() call.
-    const token = getToken();
-    if (!token) return;
+    if (!hasSessionToken()) return;
 
     const currentId = Credo.getCurrentUserId();
     if (!currentId) return;

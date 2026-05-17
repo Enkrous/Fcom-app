@@ -24,7 +24,6 @@
 import { ok, err, corsPrelight }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
-import { isSameSchool }              from '../_shared/school.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
@@ -56,12 +55,13 @@ Deno.serve(async (req: Request) => {
   // ── Load caller ───────────────────────────────────────────────────────────
   const { data: caller } = await supabase
     .from('users')
-    .select('id, school, status')
+    .select('id, school, role, status')
     .eq('id', payload.sub)
     .maybeSingle();
 
   if (!caller)                      return err('caller_not_found', 404);
   if (caller.status !== 'approved') return err('forbidden', 403);
+  if (caller.role !== 'admin')      return err('admin_only', 403);
 
   // ── Load target ───────────────────────────────────────────────────────────
   const { data: target } = await supabase
@@ -70,10 +70,9 @@ Deno.serve(async (req: Request) => {
     .eq('id', userId.trim())
     .maybeSingle();
 
-  if (!target)                          return err('user_not_found', 404);
-  if (!isSameSchool(target.school, caller.school)) return err('cross_school_forbidden', 403);
-  if (target.status !== 'pending')      return err('user_not_pending');
-  if (target.id === caller.id)          return err('cannot_approve_self');
+  if (!target) return err('user_not_found', 404);
+  if (target.status !== 'pending') return err('user_not_pending');
+  if (target.id === caller.id) return err('cannot_approve_self');
 
   // ── Atomic approve + log ──────────────────────────────────────────────────
   // approve_and_log sets app.actor_id so the trigger trg_log_status_change

@@ -20,7 +20,7 @@ import { getServiceClient }           from '../_shared/db.ts';
 import { requireAuthWithRevocation }  from '../_shared/jwt.ts';
 import { isSameSchool }               from '../_shared/school.ts';
 
-const PUBLIC_USER_FIELDS = 'id, "fullName", school, grade, nickname, "phoneVerified", status, cred, "createdAt", "avatarUrl"';
+const PUBLIC_USER_FIELDS = 'id, "fullName", school, grade, nickname, "phoneVerified", role, status, cred, "createdAt", "avatarUrl"';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
   // Load caller
   const { data: caller } = await supabase
     .from('users')
-    .select('id, school, status, cred')
+    .select('id, school, role, status, cred')
     .eq('id', myId)
     .maybeSingle();
 
@@ -83,9 +83,9 @@ Deno.serve(async (req: Request) => {
   let users = (approvedUsers ?? []).filter((user: { school: string }) =>
     isSameSchool(user.school, caller.school),
   );
-  const pending = (pendingUsers ?? []).filter((user: { school: string }) =>
-    isSameSchool(user.school, caller.school),
-  );
+  const pending = caller.role === 'admin'
+    ? (pendingUsers ?? [])
+    : [];
 
   // If rateTargets=true, filter to only users the caller can rate
   // (had conversation + no rating in last 24h)

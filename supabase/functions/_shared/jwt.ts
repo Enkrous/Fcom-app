@@ -43,6 +43,7 @@ export interface JWTPayload {
   nickname?: string;   // user's nickname
   status?:   string;   // 'approved' | 'pending' | 'rejected'
   school?:   string;   // school name — used for cross-school access checks
+  role?:     string;   // 'member' | 'admin'
 }
 
 /** Signs and returns a JWT string. exp is a Unix timestamp. */

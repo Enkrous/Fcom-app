@@ -127,6 +127,10 @@ const App = (() => {
       && API.isBackendEnabled();
   }
 
+  function _isAdmin(user) {
+    return user?.role === 'admin';
+  }
+
   // --------------- Навигация ---------------
 
   function showScreen(name) {
@@ -236,6 +240,13 @@ const App = (() => {
 
     if (user.status === 'rejected') {
       showScreen('blocked');
+      return;
+    }
+
+    if (user.phone && user.phoneVerified === false) {
+      _pendingPhone = user.phone;
+      $('#verify-phone-number').textContent = _pendingPhone;
+      showScreen('verifyPhone');
       return;
     }
 
@@ -411,7 +422,7 @@ const App = (() => {
 
     // Обновить badges и проверить новые события
     _updateNavBadges(user);
-    if (typeof Notif !== 'undefined') {
+    if (_isAdmin(user) && typeof Notif !== 'undefined') {
       Notif.checkAndNotify(user, () => showTab('users'));
     }
   }
@@ -423,7 +434,7 @@ const App = (() => {
   function _updateNavBadges(user) {
     if (typeof Notif === 'undefined') return;
     _setBadge('badge-chats', Notif.getTotalUnread(user.id));
-    _setBadge('badge-users', Credo.getPendingUsers().length);
+    _setBadge('badge-users', _isAdmin(user) ? Credo.getPendingUsers().length : 0);
   }
 
   function _setBadge(id, count) {
@@ -549,13 +560,18 @@ const App = (() => {
   // --------------- Вкладка «Пользователи» ---------------
 
   function renderUsersTab(currentUser) {
+    const isAdmin = _isAdmin(currentUser);
+
     // Заявки
-    const pending = Credo.getPendingUsers();
+    const pending = isAdmin ? Credo.getPendingUsers() : [];
     const pendingList = $('#pending-list');
     const pendingEmpty = $('#pending-empty');
 
     if (pending.length === 0) {
       pendingList.innerHTML = '';
+      pendingEmpty.textContent = isAdmin
+        ? 'Новых заявок пока нет.'
+        : 'Новые заявки могут одобрять только администраторы.';
       pendingEmpty.classList.remove('hidden');
     } else {
       pendingEmpty.classList.add('hidden');
@@ -1171,6 +1187,7 @@ const App = (() => {
   function _resetUIState() {
     _chatSearchQuery   = '';
     _memberSearchQuery = '';
+    _pendingPhone      = '';
     const searchChats   = $('#search-chats');
     const searchMembers = $('#search-members');
     if (searchChats)   searchChats.value   = '';
