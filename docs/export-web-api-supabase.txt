@@ -1,0 +1,1513 @@
+FCOM — Web API + Supabase integration (export)
+Generated: 2026-06-01
+Source: credo.js, api.js
+Load order: credo.js -> api.js -> app.js
+
+================================================================================
+FILE: credo.js
+================================================================================
+
+/**
+ * credo.js — Ядро системы «Кредо» (уровень доверия)
+ *
+ * Все данные хранятся в localStorage.
+ * Ключи:
+ *   credo_users        — JSON-массив пользователей
+ *   credo_rate_log     — JSON-массив всех оценок
+ *   credo_chats        — JSON-объект { "u1::u2": [...messages] }
+ *   credo_blocked      — "true" если устройство заблокировано
+ *   credo_current_user — id текущего пользователя
+ */
+
+'use strict';
+
+const Credo = (() => {
+
+  // --------------- Хелперы localStorage ---------------
+
+  function loadJSON(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch { return fallback; }
+  }
+
+  function saveJSON(key, data) {
+    localStorage.setItem(key, JSON.stringify(data));
+  }
+
+  // --------------- Доступ к данным ---------------
+
+  function getUsers()    { return loadJSON('credo_users', []); }
+  function saveUsers(u)  { saveJSON('credo_users', u); }
+
+  function getRateLog()    { return loadJSON('credo_rate_log', []); }
+  function saveRateLog(l)  { saveJSON('credo_rate_log', l); }
+
+  function getChats()    { return loadJSON('credo_chats', {}); }
+  function saveChats(c)  { saveJSON('credo_chats', c); }
+
+  function getGroups()        { return loadJSON('credo_groups', []); }
+  function saveGroups(groups) { saveJSON('credo_groups', groups); }
+
+  function getGroupInvites()       { return loadJSON('credo_group_invites', []); }
+  function saveGroupInvites(data)  { saveJSON('credo_group_invites', data); }
+
+  function getGroupChats()      { return loadJSON('credo_group_chats', {}); }
+  function saveGroupChats(data) { saveJSON('credo_group_chats', data); }
+
+  function getDeviceAccountIds() {
+    const ids = loadJSON('credo_device_accounts', null);
+    if (Array.isArray(ids) && ids.length > 0) {
+      return [...new Set(ids)];
+    }
+
+    const currentUserId = getCurrentUserId();
+    const derivedIds = getUsers()
+      .filter(u => Boolean(u.passwordHash) || u.id === currentUserId)
+      .map(u => u.id);
+
+    if (derivedIds.length > 0) {
+      saveJSON('credo_device_accounts', derivedIds);
+    }
+
+    return derivedIds;
+  }
+
+  function markDeviceAccount(id) {
+    if (!id) return;
+    const ids = new Set(getDeviceAccountIds());
+    ids.add(id);
+    saveJSON('credo_device_accounts', [...ids]);
+  }
+
+  function keepOnlyDeviceAccount(id) {
+    if (!id) return;
+    saveJSON('credo_device_accounts', [id]);
+  }
+
+  function isDeviceBlocked() {
+    return localStorage.getItem('credo_blocked') === 'true';
+  }
+
+  function blockDevice() {
+    localStorage.setItem('credo_blocked', 'true');
+  }
+
+  function getCurrentUserId() {
+    return localStorage.getItem('credo_current_user');
+  }
+
+  function setCurrentUserId(id) {
+    if (id) localStorage.setItem('credo_current_user', id);
+    else localStorage.removeItem('credo_current_user');
+  }
+
+  function getUserById(id) {
+    return getUsers().find(u => u.id === id) || null;
+  }
+
+  function getDeviceAccounts() {
+    const deviceIds = new Set(getDeviceAccountIds());
+    return getUsers().filter(u => deviceIds.has(u.id));
+  }
+
+  function updateUser(id, patch) {
+    const users = getUsers();
+    const idx = users.findIndex(u => u.id === id);
+    if (idx === -1) return null;
+    Object.assign(users[idx], patch);
+    saveUsers(users);
+    return users[idx];
+  }
+
+  // --------------- Уникальный ID ---------------
+
+  function generateId() {
+    return 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
+  // --------------- Уровни Кредо ---------------
+
+  const LEVELS = [
+    { name: 'Новичок',     min: 0,  max: 4,  css: 'novice'  },
+    { name: 'Знакомый',    min: 5,  max: 14, css: 'known'   },
+    { name: 'Доверенный',  min: 15, max: 29, css: 'trusted' },
+    { name: 'Свой',        min: 30, max: Infinity, css: 'own' },
+  ];
+
+  function getCredLevel(cred) {
+    const c = Math.max(0, cred);
+    return LEVELS.find(l => c >= l.min && c <= l.max) || LEVELS[0];
+  }
+
+  // Прогресс внутри текущего уровня (0..1), для шкалы
+  function getCredProgress(cred) {
+    const c = Math.max(0, cred);
+    if (c >= 30) return 1;
+    // Шкала от 0 до 40 (визуально)
+    return Math.min(c / 40, 1);
+  }
+
+  // --------------- Регистрация ---------------
+
+  function registerUser(fullName, school, grade, nickname) {
+    if (isDeviceBlocked()) return { ok: false, error: 'device_blocked' };
+
+    const users = getUsers();
+
+    // Проверка: если на этом устройстве есть отклонённый пользователь — блокируем
+    const hasRejected = users.some(u => u.status === 'rejected');
+    if (hasRejected) {
+      blockDevice();
+      return { ok: false, error: 'device_blocked' };
+    }
+
+    const nicknameExists = users.some(
+      u => u.nickname.toLowerCase() === nickname.toLowerCase()
+    );
+    if (nicknameExists) return { ok: false, error: 'nickname_taken' };
+
+    // Если нет ни одного одобренного — первый пользователь одобряется автоматически
+    const hasApproved = users.some(u => u.status === 'approved');
+
+    const user = {
+      id: generateId(),
+      fullName,
+      school,
+      grade,
+      nickname,
+      role: 'member',
+      status: hasApproved ? 'pending' : 'approved',
+      cred: hasApproved ? 0 : 1,
+      ratings: [],
+      chats: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    users.push(user);
+    saveUsers(users);
+    setCurrentUserId(user.id);
+    markDeviceAccount(user.id);
+
+    return { ok: true, user };
+  }
+
+  // --------------- Одобрение / Отклонение ---------------
+
+  function approveUser(userId) {
+    const user = updateUser(userId, { status: 'approved', cred: 1 });
+    return user;
+  }
+
+  function rejectUser(userId) {
+    const user = updateUser(userId, { status: 'rejected' });
+    return user;
+  }
+
+  // --------------- Система чатов (имитация) ---------------
+
+  /** Ключ чата — отсортированные id */
+  function chatKey(id1, id2) {
+    return [id1, id2].sort().join('::');
+  }
+
+  function getChatMessages(id1, id2) {
+    const chats = getChats();
+    return chats[chatKey(id1, id2)] || [];
+  }
+
+  function sendMessage(fromId, toId, text, extra) {
+    extra = extra || {};
+    const chats = getChats();
+    const key = chatKey(fromId, toId);
+    if (!chats[key]) chats[key] = [];
+    chats[key].push({
+      id: extra.id || generateId(),
+      from: fromId,
+      to: toId,
+      groupId: null,
+      text,
+      type: extra.type || (extra.attachmentPath ? 'image' : 'text'),
+      attachmentPath: extra.attachmentPath || null,
+      attachmentUrl: extra.attachmentUrl || null,
+      attachmentMime: extra.attachmentMime || null,
+      attachmentBytes: extra.attachmentBytes || null,
+      attachmentWidth: extra.attachmentWidth || null,
+      attachmentHeight: extra.attachmentHeight || null,
+      time: extra.time || new Date().toISOString(),
+      readAt: null,
+    });
+    saveChats(chats);
+
+    // Обновить список чатов у обоих участников
+    const users = getUsers();
+    [fromId, toId].forEach(uid => {
+      const u = users.find(x => x.id === uid);
+      if (u && !u.chats.includes(uid === fromId ? toId : fromId)) {
+        u.chats.push(uid === fromId ? toId : fromId);
+      }
+    });
+    saveUsers(users);
+  }
+
+  function getGroupById(groupId) {
+    return getGroups().find(group => group.id === groupId) || null;
+  }
+
+  function getGroupMessages(groupId) {
+    const chats = getGroupChats();
+    return chats[groupId] || [];
+  }
+
+  function sendGroupMessage(groupId, fromId, text, extra) {
+    extra = extra || {};
+    const chats = getGroupChats();
+    if (!chats[groupId]) chats[groupId] = [];
+    chats[groupId].push({
+      id: extra.id || generateId(),
+      from: fromId,
+      to: null,
+      groupId,
+      text,
+      type: extra.type || (extra.attachmentPath ? 'image' : 'text'),
+      attachmentPath: extra.attachmentPath || null,
+      attachmentUrl: extra.attachmentUrl || null,
+      attachmentMime: extra.attachmentMime || null,
+      attachmentBytes: extra.attachmentBytes || null,
+      attachmentWidth: extra.attachmentWidth || null,
+      attachmentHeight: extra.attachmentHeight || null,
+      time: extra.time || new Date().toISOString(),
+      readAt: null,
+    });
+    saveGroupChats(chats);
+  }
+
+  function createGroup(name, school, creatorId, memberIds) {
+    const creator = getUserById(creatorId);
+    if (!creator) return { ok: false, error: 'creator_not_found' };
+
+    const group = {
+      id: 'g_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name,
+      school,
+      type: 'private',
+      createdBy: creatorId,
+      createdAt: new Date().toISOString(),
+      members: [{
+        id: creator.id,
+        nickname: creator.nickname,
+        fullName: creator.fullName,
+        school: creator.school,
+        status: creator.status,
+        avatarUrl: creator.avatarUrl || null,
+        role: 'admin',
+      }],
+      memberCount: 1,
+      myRole: 'admin',
+      canManage: true,
+    };
+
+    const groups = getGroups();
+    groups.push(group);
+    saveGroups(groups);
+
+    const invites = getGroupInvites();
+    (memberIds || []).forEach((memberId) => {
+      const invitedUser = getUserById(memberId);
+      if (!invitedUser || invitedUser.id === creatorId) return;
+      invites.push({
+        id: 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        createdAt: new Date().toISOString(),
+        group: {
+          id: group.id,
+          name: group.name,
+          school: group.school,
+          type: group.type,
+        },
+        invitedBy: {
+          id: creator.id,
+          nickname: creator.nickname,
+          fullName: creator.fullName,
+        },
+        invitedUserId: invitedUser.id,
+      });
+    });
+    saveGroupInvites(invites);
+
+    return { ok: true, group };
+  }
+
+  function respondGroupInvite(inviteId, currentUserId, decision) {
+    const invites = getGroupInvites();
+    const inviteIndex = invites.findIndex((invite) => invite.id === inviteId);
+    if (inviteIndex === -1) return { ok: false, error: 'invite_not_found' };
+
+    const invite = invites[inviteIndex];
+    if (invite.invitedUserId && invite.invitedUserId !== currentUserId) {
+      return { ok: false, error: 'forbidden' };
+    }
+
+    invites.splice(inviteIndex, 1);
+    saveGroupInvites(invites);
+
+    if (decision !== 'accept') return { ok: true };
+
+    const groups = getGroups();
+    const group = groups.find((item) => item.id === invite.group?.id);
+    const user = getUserById(currentUserId);
+    if (!group || !user) return { ok: false, error: 'group_not_found' };
+
+    if (!Array.isArray(group.members)) group.members = [];
+    if (!group.members.some((member) => member.id === currentUserId)) {
+      group.members.push({
+        id: user.id,
+        nickname: user.nickname,
+        fullName: user.fullName,
+        school: user.school,
+        status: user.status,
+        avatarUrl: user.avatarUrl || null,
+        role: 'member',
+      });
+      group.memberCount = group.members.length;
+    }
+    saveGroups(groups);
+
+    return { ok: true, group };
+  }
+
+  /** Проверяет, был ли диалог между двумя пользователями */
+  function hadConversation(id1, id2) {
+    const msgs = getChatMessages(id1, id2);
+    return msgs.length > 0;
+  }
+
+  // --------------- Оценка: базовая дельта ---------------
+
+  const SCORE_DELTA = { 1: -2, 2: -1, 3: 0, 4: 1, 5: 2 };
+
+  function calculateCredDelta(score) {
+    return SCORE_DELTA[score] ?? 0;
+  }
+
+  // --------------- Вес оценки (анти-накрутка) ---------------
+
+  /**
+   * Возвращает коэффициент веса оценки.
+   * @param {number} raterCred — текущее Кредо оценивающего
+   * @param {number} timesRatedSameUser — сколько раз оценивающий уже оценивал этого пользователя
+   */
+  function getWeight(raterCred, timesRatedSameUser) {
+    let credWeight;
+    if (raterCred < 5)       credWeight = 0.3;
+    else if (raterCred < 15) credWeight = 0.7;
+    else                     credWeight = 1.0;
+
+    // Затухание повторных оценок: каждый повтор уменьшает вес на 20%
+    const repeatDecay = Math.max(0.2, Math.pow(0.8, timesRatedSameUser));
+
+    return +(credWeight * repeatDecay).toFixed(3);
+  }
+
+  // --------------- Дневной лимит (анти-скачки) ---------------
+
+  const MAX_DAILY_CHANGE = 5;
+
+  /** Суммарное изменение cred за последние 24 часа */
+  function getDailyCredChange(userId) {
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    const user = getUserById(userId);
+    if (!user) return 0;
+
+    return user.ratings
+      .filter(r => new Date(r.date).getTime() > dayAgo)
+      .reduce((sum, r) => sum + (r.effectiveDelta || 0), 0);
+  }
+
+  function clampCredChange(userId, proposedDelta) {
+    const alreadyChanged = getDailyCredChange(userId);
+    const remaining = MAX_DAILY_CHANGE - Math.abs(alreadyChanged);
+
+    if (remaining <= 0) return 0;
+
+    if (proposedDelta > 0) return Math.min(proposedDelta, remaining);
+    if (proposedDelta < 0) return Math.max(proposedDelta, -remaining);
+    return 0;
+  }
+
+  // --------------- Проверка: можно ли оценить ---------------
+
+  function canRate(fromId, toId) {
+    if (fromId === toId) return { ok: false, reason: 'self' };
+
+    if (!hadConversation(fromId, toId)) {
+      return { ok: false, reason: 'no_chat' };
+    }
+
+    // Проверка 24-часового ограничения
+    const log = getRateLog();
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    const recent = log.find(
+      r => r.from === fromId && r.to === toId && new Date(r.date).getTime() > dayAgo
+    );
+    if (recent) return { ok: false, reason: '24h_limit' };
+
+    return { ok: true };
+  }
+
+  // --------------- Основная функция оценки ---------------
+
+  function rateUser(fromId, toId, score) {
+    // Валидация
+    if (score < 1 || score > 5 || !Number.isInteger(score)) {
+      return { ok: false, error: 'invalid_score' };
+    }
+
+    const check = canRate(fromId, toId);
+    if (!check.ok) return { ok: false, error: check.reason };
+
+    const rater = getUserById(fromId);
+    const target = getUserById(toId);
+    if (!rater || !target) return { ok: false, error: 'user_not_found' };
+
+    // Сколько раз этот человек уже оценивал данного пользователя
+    const log = getRateLog();
+    const timesRated = log.filter(r => r.from === fromId && r.to === toId).length;
+
+    const weight = getWeight(rater.cred, timesRated);
+    const baseDelta = calculateCredDelta(score);
+    const rawDelta = +(baseDelta * weight).toFixed(2);
+    const effectiveDelta = clampCredChange(toId, rawDelta);
+
+    // Запись в лог
+    const entry = {
+      from: fromId,
+      to: toId,
+      score,
+      weight,
+      baseDelta,
+      effectiveDelta,
+      date: new Date().toISOString(),
+    };
+
+    log.push(entry);
+    saveRateLog(log);
+
+    // Обновить ratings и cred целевого пользователя
+    const users = getUsers();
+    const ti = users.findIndex(u => u.id === toId);
+    users[ti].ratings.push(entry);
+    users[ti].cred = Math.max(0, +(users[ti].cred + effectiveDelta).toFixed(2));
+    saveUsers(users);
+
+    return { ok: true, entry, newCred: users[ti].cred };
+  }
+
+  // --------------- Списки пользователей ---------------
+
+  function getPendingUsers() {
+    return getUsers().filter(u => u.status === 'pending');
+  }
+
+  function getApprovedUsers() {
+    return getUsers().filter(u => u.status === 'approved');
+  }
+
+  /**
+   * Пользователи, которых текущий может оценить:
+   * - был диалог
+   * - не оценивал за последние 24ч
+   */
+  function getUsersToRate(fromId) {
+    const approved = getApprovedUsers().filter(u => u.id !== fromId);
+    return approved.filter(u => {
+      const check = canRate(fromId, u.id);
+      return check.ok;
+    });
+  }
+
+  /**
+   * История полученных оценок пользователя (последние 50)
+   */
+  function getRateHistory(userId) {
+    const user = getUserById(userId);
+    if (!user) return [];
+    return [...user.ratings].reverse().slice(0, 50);
+  }
+
+  /**
+   * Список собеседников (id), с которыми были чаты
+   */
+  function getChatPartners(userId) {
+    const user = getUserById(userId);
+    return user ? user.chats : [];
+  }
+
+  // --------------- Полный сброс (для демо) ---------------
+
+  function resetAll() {
+    localStorage.removeItem('credo_users');
+    localStorage.removeItem('credo_rate_log');
+    localStorage.removeItem('credo_chats');
+    localStorage.removeItem('credo_groups');
+    localStorage.removeItem('credo_group_invites');
+    localStorage.removeItem('credo_group_chats');
+    localStorage.removeItem('credo_device_accounts');
+    localStorage.removeItem('credo_blocked');
+    localStorage.removeItem('credo_current_user');
+  }
+
+  // --------------- Публичный API ---------------
+
+  return {
+    // Данные
+    updateUser,
+    getUsers,
+    getDeviceAccounts,
+    getUserById,
+    getCurrentUserId,
+    setCurrentUserId,
+    markDeviceAccount,
+    keepOnlyDeviceAccount,
+    isDeviceBlocked,
+    blockDevice,
+
+    // Регистрация
+    registerUser,
+    approveUser,
+    rejectUser,
+
+    // Чаты
+    getChatMessages,
+    sendMessage,
+    getGroupMessages,
+    sendGroupMessage,
+    getGroups,
+    getGroupById,
+    getGroupInvites,
+    createGroup,
+    respondGroupInvite,
+    hadConversation,
+    chatKey,
+
+    // Оценки
+    canRate,
+    rateUser,
+    calculateCredDelta,
+    getWeight,
+    clampCredChange,
+
+    // Списки
+    getPendingUsers,
+    getApprovedUsers,
+    getUsersToRate,
+    getRateHistory,
+    getChatPartners,
+
+    // Уровни
+    getCredLevel,
+    getCredProgress,
+    LEVELS,
+
+    // Утилиты
+    resetAll,
+    generateId,
+  };
+
+})();
+
+
+================================================================================
+FILE: api.js
+================================================================================
+
+'use strict';
+
+/**
+ * api.js — Bridge between UI (app.js / credo.js) and Supabase backend.
+ *
+ * MODES:
+ *
+ *   LOCAL MODE  (SUPABASE_URL = ''):
+ *     All reads/writes go through Credo.* (localStorage).
+ *     Identical to the original demo behaviour — no backend required.
+ *
+ *   BACKEND MODE (SUPABASE_URL filled in):
+ *     API.register / API.login / API.setPassword → fetch to Edge Functions.
+ *     Credo.approveUser / rejectUser / rateUser / sendMessage are monkey-patched:
+ *       they still update localStorage immediately (synchronous, so app.js works
+ *       unchanged) and also fire the matching backend call as a side-effect.
+ *     On login and on page-load, all server data is synced into localStorage so
+ *     every Credo.* read method continues to work without modification.
+ *
+ * Loading order in index.html: credo.js → api.js → app.js
+ * api.js patches Credo before app.js initialises, so all calls are intercepted.
+ */
+
+const API = (() => {
+
+  // ─── CONFIGURATION ────────────────────────────────────────────────
+  const SUPABASE_URL   = 'https://vzjlhiqvfgrrlfdgyebx.supabase.co';
+  const FUNCTIONS_BASE = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1` : null;
+  const SYNC_EVENT     = 'fcom:server-sync';
+  const SYNC_INTERVAL  = 2000;
+
+  // ─── TOKEN STORAGE ────────────────────────────────────────────────
+  const TOKEN_KEY     = 'fcom_token';      // long-lived session JWT (after login)
+  const REG_TOKEN_KEY = 'fcom_reg_token';  // 1-hour JWT returned after /register
+
+  let _syncTimer = null;
+  let _syncInFlight = null;
+  let _origSendMessage = null;
+
+  function getToken()     { return localStorage.getItem(TOKEN_KEY); }
+  function setToken(t)    { t ? localStorage.setItem(TOKEN_KEY, t)     : localStorage.removeItem(TOKEN_KEY); }
+  function getRegToken()  { return localStorage.getItem(REG_TOKEN_KEY); }
+  function setRegToken(t) { t ? localStorage.setItem(REG_TOKEN_KEY, t) : localStorage.removeItem(REG_TOKEN_KEY); }
+  function hasSessionToken() { return Boolean(getToken() || getRegToken()); }
+
+  // ─── DEVICE FINGERPRINT ───────────────────────────────────────────
+  async function getDeviceFingerprint() {
+    const raw = [
+      navigator.userAgent,
+      `${screen.width}x${screen.height}`,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    ].join('|');
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    return Array.from(new Uint8Array(buf))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  // ─── BASE HTTP HELPER ─────────────────────────────────────────────
+  async function _call(path, { method = 'GET', body, useRegToken = false } = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = useRegToken ? (getRegToken() || getToken()) : getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let res, data;
+    try {
+      res = await fetch(`${FUNCTIONS_BASE}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      data = await res.json();
+    } catch (e) {
+      throw e;
+    }
+    return data;
+  }
+
+  // ─── SHA-256 (local-only mode password hashing) ───────────────────
+  async function _sha256(password) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+    return Array.from(new Uint8Array(buf))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  function _emitSync(detail) {
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail }));
+  }
+
+  function _writeJSONIfChanged(key, value) {
+    const next = JSON.stringify(value);
+    const prev = localStorage.getItem(key);
+    if (prev === next) return false;
+    localStorage.setItem(key, next);
+    return true;
+  }
+
+  function _mergeCurrentUser(user, extra = {}) {
+    if (!user?.id) return null;
+
+    const users = Credo.getUsers();
+    const index = users.findIndex((item) => item.id === user.id);
+    const existing = index >= 0 ? users[index] : {};
+    const merged = {
+      ratings: Array.isArray(existing.ratings) ? existing.ratings : [],
+      chats: Array.isArray(existing.chats) ? existing.chats : [],
+      ...(existing.passwordHash ? { passwordHash: existing.passwordHash } : {}),
+      ...existing,
+      ...user,
+      ...extra,
+    };
+
+    if (index >= 0) users[index] = merged;
+    else users.push(merged);
+
+    localStorage.setItem('credo_users', JSON.stringify(users));
+    return merged;
+  }
+
+  async function _syncCurrentUser() {
+    const meRes = await _call('/me', { useRegToken: true });
+    if (!meRes.ok || !meRes.user) {
+      return { ok: false, changed: false, error: meRes.error || 'sync_failed' };
+    }
+
+    const currentId = Credo.getCurrentUserId();
+    const previous = currentId ? Credo.getUserById(currentId) : null;
+    const merged = _mergeCurrentUser(meRes.user);
+    const changed = JSON.stringify(previous) !== JSON.stringify(merged);
+
+    if (merged?.id) {
+      Credo.setCurrentUserId(merged.id);
+      Credo.markDeviceAccount(merged.id);
+    }
+
+    return {
+      ok: true,
+      changed,
+      user: merged,
+      canApprove: Boolean(meRes.canApprove),
+    };
+  }
+
+  async function _syncGroupsFromServer() {
+    const groupsRes = await _call('/groups');
+    if (!groupsRes.ok) {
+      return { ok: false, changed: false, error: groupsRes.error || 'groups_sync_failed' };
+    }
+
+    const groupsChanged = _writeJSONIfChanged('credo_groups', groupsRes.groups || []);
+    const invitesChanged = _writeJSONIfChanged('credo_group_invites', groupsRes.invites || []);
+
+    const groups = Array.isArray(groupsRes.groups) ? groupsRes.groups : [];
+    const existingGroupChats = JSON.parse(localStorage.getItem('credo_group_chats') || '{}');
+    let groupChatsChanged = false;
+
+    await Promise.allSettled(groups.map(async (group) => {
+      try {
+        const msgRes = await _call(`/messages?groupId=${encodeURIComponent(group.id)}`);
+        const nextMessages = (msgRes.ok && Array.isArray(msgRes.messages))
+          ? msgRes.messages.map((m) => ({
+              id: m.id,
+              from: m.fromId,
+              to: m.toId ?? null,
+              groupId: m.groupId ?? group.id,
+              text: m.text || '',
+              type: m.type || 'text',
+              attachmentPath: m.attachmentPath ?? null,
+              attachmentUrl: m.attachmentUrl ?? null,
+              attachmentMime: m.attachmentMime ?? null,
+              attachmentBytes: m.attachmentBytes ?? null,
+              attachmentWidth: m.attachmentWidth ?? null,
+              attachmentHeight: m.attachmentHeight ?? null,
+              time: m.time,
+              readAt: m.readAt ?? null,
+            }))
+          : [];
+
+        if (JSON.stringify(existingGroupChats[group.id] || []) !== JSON.stringify(nextMessages)) {
+          existingGroupChats[group.id] = nextMessages;
+          groupChatsChanged = true;
+        }
+      } catch { /* ignore individual group fetch failure */ }
+    }));
+
+    if (groupChatsChanged) {
+      localStorage.setItem('credo_group_chats', JSON.stringify(existingGroupChats));
+    }
+
+    return {
+      ok: true,
+      changed: groupsChanged || invitesChanged || groupChatsChanged,
+      groupsChanged,
+      invitesChanged,
+      groupChatsChanged,
+    };
+  }
+
+  // ─── SYNC: populate localStorage from server ──────────────────────
+  // Called after login and on each page load when a token exists.
+  // Writes into the same localStorage keys that credo.js reads, so all
+  // Credo.* read methods (getUsers, getChatMessages, etc.) work unchanged.
+  async function _syncFromServer(currentUser) {
+    try {
+      const usersRes = await _call('/users');
+      if (!usersRes.ok) {
+        return { ok: false, changed: false, error: usersRes.error || 'sync_failed' };
+      }
+
+      // Build deduplicated user map; preserve local arrays (ratings, chats)
+      const existingUsers = Credo.getUsers();
+      const existingMap = {};
+      existingUsers.forEach(u => { existingMap[u.id] = u; });
+
+      const userMap = {};
+      Credo.getDeviceAccounts().forEach(u => {
+        if (!u?.id) return;
+        userMap[u.id] = {
+          ratings: u.ratings || [],
+          chats:   u.chats   || [],
+          ...u,
+        };
+      });
+
+      [currentUser, ...usersRes.users, ...usersRes.pending].forEach(u => {
+        if (!u?.id) return;
+        const existing = existingMap[u.id] || {};
+        const preservedPasswordHash = existing.passwordHash || userMap[u.id]?.passwordHash;
+        userMap[u.id] = {
+          ratings: existing.ratings || [],
+          chats:   existing.chats   || [],
+          ...(preservedPasswordHash ? { passwordHash: preservedPasswordHash } : {}),
+          ...u,
+        };
+      });
+
+      const allUsers = Object.values(userMap);
+      let usersChanged = _writeJSONIfChanged('credo_users', allUsers);
+
+      // Sync chat messages from each approved partner
+      const partners = (usersRes.users || []).filter(u => u.id !== currentUser.id);
+      const existingChats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      let chatsChanged = false;
+
+      await Promise.allSettled(partners.map(async (partner) => {
+        try {
+          const msgRes = await _call(`/messages?partnerId=${partner.id}`);
+          const chatKey = [currentUser.id, partner.id].sort().join('::');
+          const nextMessages = (msgRes.ok && Array.isArray(msgRes.messages))
+            ? msgRes.messages.map(m => ({
+              id: m.id,
+              from: m.fromId,
+              to: m.toId,
+              groupId: m.groupId ?? null,
+              text: m.text,
+              type: m.type || 'text',
+              attachmentPath: m.attachmentPath ?? null,
+              attachmentUrl: m.attachmentUrl ?? null,
+              attachmentMime: m.attachmentMime ?? null,
+              attachmentBytes: m.attachmentBytes ?? null,
+              attachmentWidth: m.attachmentWidth ?? null,
+              attachmentHeight: m.attachmentHeight ?? null,
+              time: m.time,
+              readAt: m.readAt ?? null,
+            }))
+            : [];
+
+          if (JSON.stringify(existingChats[chatKey] || []) !== JSON.stringify(nextMessages)) {
+            existingChats[chatKey] = nextMessages;
+            chatsChanged = true;
+          }
+
+          if (!nextMessages.length) return;
+
+          // Keep chats[] arrays on user objects in sync
+          const cu = userMap[currentUser.id];
+          const pu = userMap[partner.id];
+          if (cu && !cu.chats.includes(partner.id)) cu.chats.push(partner.id);
+          if (pu && !pu.chats.includes(currentUser.id)) pu.chats.push(currentUser.id);
+        } catch { /* skip individual chat failure */ }
+      }));
+
+      if (chatsChanged) {
+        localStorage.setItem('credo_chats', JSON.stringify(existingChats));
+      }
+
+      const finalUsers = Object.values(userMap);
+      usersChanged = _writeJSONIfChanged('credo_users', finalUsers) || usersChanged;
+      Credo.setCurrentUserId(currentUser.id);
+      return {
+        ok: true,
+        changed: usersChanged || chatsChanged,
+        usersChanged,
+        chatsChanged,
+      };
+
+    } catch (e) {
+      console.warn('[API] Sync from server failed:', e);
+      return { ok: false, changed: false, error: 'network_error' };
+    }
+  }
+
+  // ─── MONKEY-PATCH CREDO WRITE METHODS ────────────────────────────
+  // Each patched method:
+  //   1. Calls the original Credo method — updates localStorage immediately
+  //      (synchronous, so app.js view rendering works unchanged)
+  //   2. Fires the backend call as a background side-effect (fire-and-forget)
+  async function syncNow() {
+    if (!FUNCTIONS_BASE || !hasSessionToken()) {
+      return { ok: false, changed: false, error: 'not_authenticated' };
+    }
+
+    if (_syncInFlight) return _syncInFlight;
+
+    const currentId = Credo.getCurrentUserId();
+    const currentUser = currentId ? Credo.getUserById(currentId) : null;
+    if (!currentUser) {
+      return { ok: false, changed: false, error: 'missing_current_user' };
+    }
+
+    _syncInFlight = (async () => {
+      const meResult = await _syncCurrentUser();
+      if (!meResult.ok || !meResult.user) return meResult;
+
+      const hasLoginToken = Boolean(getToken());
+      if (!hasLoginToken || meResult.user.status !== 'approved') {
+        return meResult;
+      }
+
+      const [serverResult, groupsResult] = await Promise.all([
+        _syncFromServer(meResult.user),
+        _syncGroupsFromServer(),
+      ]);
+      return {
+        ok: serverResult.ok && groupsResult.ok,
+        error: serverResult.error || groupsResult.error,
+        changed: Boolean(meResult.changed || serverResult.changed || groupsResult.changed),
+      };
+    })()
+      .then((result) => {
+        if (result?.ok && result.changed) _emitSync(result);
+        return result;
+      })
+      .finally(() => {
+        _syncInFlight = null;
+      });
+
+    return _syncInFlight;
+  }
+
+  function startLiveSync() {
+    if (!FUNCTIONS_BASE || !hasSessionToken()) return;
+    stopLiveSync();
+    _syncTimer = setInterval(() => {
+      syncNow().catch(() => {});
+    }, SYNC_INTERVAL);
+  }
+
+  function stopLiveSync() {
+    clearInterval(_syncTimer);
+    _syncTimer = null;
+  }
+
+  function _patchCredo() {
+    if (!FUNCTIONS_BASE) return; // local-only mode: no patching needed
+
+    // approveUser
+    const _origApprove = Credo.approveUser.bind(Credo);
+    Credo.approveUser = function(userId) {
+      const before = Credo.getUserById(userId);
+      const result = _origApprove(userId);
+      _call('/approve', { method: 'POST', body: { userId } })
+        .then((res) => {
+          if (!res?.ok && before) {
+            Credo.updateUser(userId, {
+              status: before.status,
+              cred: before.cred,
+            });
+            _emitSync({ ok: false, changed: true, error: res.error || 'approve_failed' });
+          }
+        })
+        .catch(e => console.warn('[API] approve backend error:', e));
+      return result;
+    };
+
+    // rejectUser — also sends device fingerprint for device blocking
+    const _origReject = Credo.rejectUser.bind(Credo);
+    Credo.rejectUser = function(userId) {
+      const before = Credo.getUserById(userId);
+      const result = _origReject(userId);
+      getDeviceFingerprint()
+        .then(fp => _call('/reject', { method: 'POST', body: { userId, deviceFingerprint: fp } }))
+        .then((res) => {
+          if (!res?.ok && before) {
+            Credo.updateUser(userId, { status: before.status });
+            _emitSync({ ok: false, changed: true, error: res.error || 'reject_failed' });
+          }
+        })
+        .catch(e => console.warn('[API] reject backend error:', e));
+      return result;
+    };
+
+    // rateUser — only fires backend call if local validation passed
+    const _origRate = Credo.rateUser.bind(Credo);
+    Credo.rateUser = function(fromId, toId, score) {
+      const result = _origRate(fromId, toId, score);
+      if (result.ok) {
+        _call('/rate', { method: 'POST', body: { toId, score } })
+          .catch(e => console.warn('[API] rate backend error:', e));
+      }
+      return result;
+    };
+
+    // sendMessage
+    const _origSend = Credo.sendMessage.bind(Credo);
+    _origSendMessage = _origSend;
+    Credo.sendMessage = function(fromId, toId, text) {
+      _origSend(fromId, toId, text);
+      _call('/messages', { method: 'POST', body: { toId, text } })
+        .catch(e => console.warn('[API] sendMessage backend error:', e));
+    };
+  }
+
+  // ─── API.register ─────────────────────────────────────────────────
+  async function register({ fullName, school, grade, nickname, phone = '' }) {
+    // LOCAL MODE
+    if (!FUNCTIONS_BASE) {
+      return Credo.registerUser(fullName, school, grade, nickname);
+    }
+
+    // BACKEND MODE
+    let deviceFingerprint;
+    try {
+      deviceFingerprint = await getDeviceFingerprint();
+    } catch {
+      deviceFingerprint = '';
+    }
+
+    let result;
+    try {
+      result = await _call('/register', {
+        method: 'POST',
+        body: { fullName, school, grade, nickname, phone, deviceFingerprint },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    if (!result.ok) return result;
+
+    const user = result.user;
+
+    // Store the registration JWT so /set-password can be called immediately
+    if (result.token) setRegToken(result.token);
+    _mergeCurrentUser(user);
+
+    Credo.setCurrentUserId(user.id);
+    Credo.markDeviceAccount(user.id);
+    startLiveSync();
+    return result;
+  }
+
+  // ─── API.setPassword ──────────────────────────────────────────────
+  async function setPassword(userId, password) {
+    // LOCAL MODE
+    if (!FUNCTIONS_BASE) {
+      const hash = await _sha256(password);
+      return Credo.updateUser(userId, { passwordHash: hash });
+    }
+
+    // BACKEND MODE — uses the registration token (or session token if re-setting)
+    let result;
+    try {
+      result = await _call('/set-password', {
+        method: 'POST',
+        body: { password },
+        useRegToken: true,
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    if (!result.ok) return result;
+
+    // Mark password as set locally (sentinel avoids storing hash client-side)
+    Credo.updateUser(userId, { passwordHash: '__set__' });
+
+    const currentUser = Credo.getUserById(userId);
+    if (!currentUser?.nickname) return result;
+
+    const loginResult = await login(currentUser.nickname, password);
+    if (!loginResult.ok) {
+      return { ok: false, error: loginResult.error || 'login_after_set_password_failed' };
+    }
+
+    setRegToken(null);
+    return { ...result, token: loginResult.token, user: loginResult.user };
+  }
+
+  // ─── API.login ────────────────────────────────────────────────────
+  async function login(nickname, password) {
+    // LOCAL MODE
+    if (!FUNCTIONS_BASE) {
+      const users = Credo.getUsers();
+      const user = users.find(u => u.nickname === nickname);
+      if (!user || !user.passwordHash) return { ok: false };
+      const hash = await _sha256(password);
+      // Accept both SHA-256 hash and '__set__' sentinel (backend-set password)
+      if (user.passwordHash === hash || user.passwordHash === '__set__') {
+        Credo.setCurrentUserId(user.id);
+        Credo.markDeviceAccount(user.id);
+        return { ok: true, user };
+      }
+      return { ok: false };
+    }
+
+    // BACKEND MODE
+    let result;
+    try {
+      result = await _call('/login', { method: 'POST', body: { nickname, password } });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    if (!result.ok) return result;
+
+    // Store session token and sync all data into localStorage
+    setToken(result.token);
+    Credo.setCurrentUserId(result.user.id);
+    Credo.markDeviceAccount(result.user.id);
+    const seededUser = _mergeCurrentUser(result.user, { passwordHash: '__set__' });
+
+    await _syncFromServer(seededUser);
+    Credo.updateUser(result.user.id, { passwordHash: '__set__' });
+    startLiveSync();
+
+    return result;
+  }
+
+  // ─── API.verifyPhone ──────────────────────────────────────────────
+  // Submits an OTP code received via SMS.
+  // Backend mode: POST /verify-phone { phone, code }
+  // Local mode:   treated as always-success (no SMS in local demo)
+  async function verifyPhone(phone, code) {
+    if (!FUNCTIONS_BASE) return { ok: true };
+
+    let result;
+    try {
+      result = await _call('/verify-phone', {
+        method: 'POST',
+        body: { phone, code },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+    return result;
+  }
+
+  // ─── API.resendOtp ────────────────────────────────────────────────
+  // Invalidates existing OTPs and sends a fresh code to the phone.
+  // Local mode: no-op (returns success immediately).
+  async function resendOtp(phone) {
+    if (!FUNCTIONS_BASE) return { ok: true };
+
+    let result;
+    try {
+      result = await _call('/resend-otp', {
+        method: 'POST',
+        body: { phone },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+    return result;
+  }
+
+  // ─── API.logout ───────────────────────────────────────────────────
+  // Revokes the server-side session (deletes the sessions row for this jti)
+  // and clears all local JWT state.
+  // Safe to call even if the token is already expired or missing.
+  async function logout() {
+    if (FUNCTIONS_BASE && getToken()) {
+      try {
+        await _call('/logout', { method: 'POST' });
+      } catch {
+        // Non-fatal — clear local state regardless of network outcome.
+      }
+    }
+    setToken(null);
+    setRegToken(null);
+    stopLiveSync();
+    Credo.setCurrentUserId(null);
+    return { ok: true };
+  }
+
+  // ─── API.approve / reject ─────────────────────────────────────────
+  // These delegate to the (already monkey-patched) Credo methods,
+  // preserving the original call sites in app.js that use Credo directly.
+  function approve(userId) {
+    return Credo.approveUser(userId);
+  }
+
+  function reject(userId) {
+    return Credo.rejectUser(userId);
+  }
+
+  async function createGroup(name, memberIds) {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!FUNCTIONS_BASE) {
+      return Credo.createGroup(name, currentUser?.school || '', currentUser?.id, memberIds);
+    }
+
+    const result = await _call('/groups', {
+      method: 'POST',
+      body: {
+        action: 'create',
+        name,
+        memberIds,
+      },
+    });
+
+    if (result.ok) {
+      await syncNow().catch(() => {});
+    }
+
+    return result;
+  }
+
+  async function respondGroupInvite(inviteId, decision) {
+    if (!FUNCTIONS_BASE) {
+      return Credo.respondGroupInvite(inviteId, Credo.getCurrentUserId(), decision);
+    }
+
+    const result = await _call('/groups', {
+      method: 'POST',
+      body: {
+        action: 'respond_invite',
+        inviteId,
+        decision,
+      },
+    });
+
+    if (result.ok) {
+      await syncNow().catch(() => {});
+    }
+
+    return result;
+  }
+
+  async function leaveGroup(groupId) {
+    if (!FUNCTIONS_BASE) return { ok: false, error: 'not_supported_local' };
+
+    const result = await _call('/groups', {
+      method: 'POST',
+      body: {
+        action: 'leave',
+        groupId,
+      },
+    });
+
+    if (result.ok) {
+      await syncNow().catch(() => {});
+    }
+
+    return result;
+  }
+
+  async function adminStats() {
+    if (!FUNCTIONS_BASE) {
+      const users = Credo.getUsers();
+      const groups = Credo.getGroups();
+      const directChats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      const groupChats = JSON.parse(localStorage.getItem('credo_group_chats') || '{}');
+      const allMessages = [
+        ...Object.values(directChats).flat(),
+        ...Object.values(groupChats).flat(),
+      ];
+
+      return {
+        ok: true,
+        summary: {
+          totalUsers: users.length,
+          approvedUsers: users.filter((user) => user.status === 'approved').length,
+          pendingUsers: users.filter((user) => user.status === 'pending').length,
+          rejectedUsers: users.filter((user) => user.status === 'rejected').length,
+          adminUsers: users.filter((user) => user.role === 'admin').length,
+          totalMessages: allMessages.length,
+          messages24h: allMessages.filter((message) => Date.now() - new Date(message.time).getTime() <= 24 * 60 * 60 * 1000).length,
+          images24h: allMessages.filter((message) => message.type === 'image' && Date.now() - new Date(message.time).getTime() <= 24 * 60 * 60 * 1000).length,
+          totalGroups: groups.length,
+          publicGroups: groups.filter((group) => group.type === 'school_public').length,
+          privateGroups: groups.filter((group) => group.type === 'private').length,
+          pendingInvites: Credo.getGroupInvites().length,
+        },
+        schools: [],
+        recentUsers: [...users].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 12),
+        groups,
+      };
+    }
+
+    try {
+      return await _call('/admin-stats');
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+  }
+
+  async function uploadMedia(file, width = null, height = null) {
+    if (!FUNCTIONS_BASE) {
+      return { ok: false, error: 'not_supported_local' };
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (width) formData.append('width', String(width));
+    if (height) formData.append('height', String(height));
+
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    let res, data;
+    try {
+      res = await fetch(`${FUNCTIONS_BASE}/upload-media`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      data = await res.json();
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    return data;
+  }
+
+  async function sendMessage(payloadOrFromId, maybeToId, maybeText) {
+    const payload = typeof payloadOrFromId === 'object' && payloadOrFromId !== null
+      ? payloadOrFromId
+      : { fromId: payloadOrFromId, toId: maybeToId, text: maybeText };
+
+    const {
+      fromId,
+      toId = null,
+      groupId = null,
+      text = '',
+      file = null,
+    } = payload;
+
+    if (!FUNCTIONS_BASE) {
+      if (groupId) {
+        Credo.sendGroupMessage(groupId, fromId, text);
+        const messages = Credo.getGroupMessages(groupId);
+        return { ok: true, message: messages[messages.length - 1] || null };
+      }
+      Credo.sendMessage(fromId, toId, text);
+      const messages = Credo.getChatMessages(fromId, toId);
+      return { ok: true, message: messages[messages.length - 1] || null };
+    }
+
+    if (groupId || file) {
+      let media = null;
+      if (file) {
+        const uploadResult = await uploadMedia(file, payload.imageWidth, payload.imageHeight);
+        if (!uploadResult.ok) return uploadResult;
+        media = uploadResult.media;
+      }
+
+      const body = {
+        toId,
+        groupId,
+        text,
+        attachmentPath: media?.path || null,
+        attachmentMime: media?.mime || null,
+        attachmentBytes: media?.bytes || null,
+        attachmentWidth: media?.width || null,
+        attachmentHeight: media?.height || null,
+      };
+
+      const sendGroupPayload = async () => {
+        try {
+          return await _call('/messages', {
+          method: 'POST',
+          body,
+        });
+        } catch {
+          return { ok: false, error: 'network_error' };
+        }
+      };
+
+      let result = await sendGroupPayload();
+      if (!result?.ok && result?.error === 'group_not_found') {
+        await syncNow().catch(() => {});
+        result = await sendGroupPayload();
+      }
+
+      if (result?.ok) {
+        await syncNow().catch(() => {});
+      }
+      return result;
+    }
+
+    const originalSend = _origSendMessage || Credo.sendMessage.bind(Credo);
+    const chatKey = Credo.chatKey(fromId, toId);
+    const previousMessages = Credo.getChatMessages(fromId, toId).slice();
+    const usersSnapshot = Credo.getUsers().map((user) => ({
+      ...user,
+      ratings: Array.isArray(user.ratings) ? [...user.ratings] : [],
+      chats: Array.isArray(user.chats) ? [...user.chats] : [],
+    }));
+
+    originalSend(fromId, toId, text);
+
+    let result;
+    try {
+      result = await _call('/messages', { method: 'POST', body: { toId, text } });
+    } catch {
+      result = { ok: false, error: 'network_error' };
+    }
+
+    if (!result?.ok) {
+      const chats = JSON.parse(localStorage.getItem('credo_chats') || '{}');
+      if (previousMessages.length > 0) chats[chatKey] = previousMessages;
+      else delete chats[chatKey];
+      localStorage.setItem('credo_chats', JSON.stringify(chats));
+      localStorage.setItem('credo_users', JSON.stringify(usersSnapshot));
+      return result;
+    }
+
+    await syncNow().catch(() => {});
+    return result;
+  }
+
+  // ─── INIT ─────────────────────────────────────────────────────────
+  function _init() {
+    _patchCredo();
+
+    if (!FUNCTIONS_BASE) return;
+
+    // On page load with an existing session: re-sync data from server.
+    // This runs in the background — app.js will use the cached localStorage
+    // data immediately; the UI will reflect server data on next route() call.
+    if (!hasSessionToken()) return;
+
+    const currentId = Credo.getCurrentUserId();
+    if (!currentId) return;
+
+    Credo.markDeviceAccount(currentId);
+
+    let currentUser = Credo.getUserById(currentId);
+    if (currentUser && !currentUser.passwordHash) {
+      currentUser = Credo.updateUser(currentId, { passwordHash: '__set__' }) || currentUser;
+    }
+    if (currentUser) {
+      syncNow().catch(() => {});
+      startLiveSync();
+    }
+  }
+
+  // Patch before app.js DOMContentLoaded handler fires
+  document.addEventListener('DOMContentLoaded', _init, { once: true });
+
+  return {
+    register,
+    login,
+    logout,
+    setPassword,
+    verifyPhone,
+    resendOtp,
+    sendMessage,
+    createGroup,
+    respondGroupInvite,
+    leaveGroup,
+    uploadMedia,
+    adminStats,
+    syncNow,
+    startLiveSync,
+    stopLiveSync,
+    isBackendEnabled: () => Boolean(FUNCTIONS_BASE),
+    SYNC_EVENT,
+    approve,
+    reject,
+  };
+
+})();
