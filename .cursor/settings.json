@@ -8,6 +8,12 @@
     },
     "supabase": {
       "enabled": true
+    },
+    "figma": {
+      "enabled": true
+    },
+    "context7-plugin": {
+      "enabled": true
     }
   }
 }
