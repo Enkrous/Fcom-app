@@ -88,7 +88,16 @@ verify_jwt = false
 [functions.approve]
 verify_jwt = false
 
+[functions.block-user]
+verify_jwt = false
+
 [functions.reject]
+verify_jwt = false
+
+[functions.report-user]
+verify_jwt = false
+
+[functions.reports-admin]
 verify_jwt = false
 
 [functions.rate]
@@ -107,6 +116,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.me]
+verify_jwt = false
+
+[functions.admin-stats]
 verify_jwt = false
 
 [functions.cleanup]

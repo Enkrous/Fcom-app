@@ -28,6 +28,7 @@ import { getGroupAccess }            from '../_shared/groups.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb }               from '../_shared/ratelimit.ts';
 import { isSameSchool }              from '../_shared/school.ts';
+import { hasUserBlock }              from '../_shared/blocks.ts';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT     = 100;
@@ -135,6 +136,7 @@ Deno.serve(async (req: Request) => {
     if (!partner)                              return err('partner_not_found', 404);
     if (!isSameSchool(partner.school, caller.school)) return err('cross_school_forbidden', 403);
     if (partner.status !== 'approved')         return err('partner_not_approved');
+    if (await hasUserBlock(supabase, myId, partnerId!)) return err('user_blocked', 403);
 
     // Build conversation query
     let query = supabase
@@ -259,6 +261,7 @@ Deno.serve(async (req: Request) => {
     if (!recipient)                                return err('recipient_not_found', 404);
     if (!isSameSchool(recipient.school, caller.school)) return err('cross_school_forbidden', 403);
     if (recipient.status !== 'approved')           return err('recipient_not_approved');
+    if (await hasUserBlock(supabase, myId, toId!))   return err('user_blocked', 403);
 
     const { data: message, error: insertErr } = await supabase
       .from('messages')

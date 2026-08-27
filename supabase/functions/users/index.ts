@@ -19,6 +19,7 @@ import { ok, err, corsPrelight }      from '../_shared/response.ts';
 import { getServiceClient }           from '../_shared/db.ts';
 import { requireAuthWithRevocation }  from '../_shared/jwt.ts';
 import { isSameSchool }               from '../_shared/school.ts';
+import { filterBlockedPeers }         from '../_shared/blocks.ts';
 
 const PUBLIC_USER_FIELDS = 'id, "fullName", school, grade, nickname, "phoneVerified", role, status, cred, "createdAt", "avatarUrl"';
 
@@ -83,6 +84,7 @@ Deno.serve(async (req: Request) => {
   let users = (approvedUsers ?? []).filter((user: { school: string }) =>
     isSameSchool(user.school, caller.school),
   );
+  users = await filterBlockedPeers(supabase, myId, users);
   const pending = caller.role === 'admin'
     ? (pendingUsers ?? [])
     : [];

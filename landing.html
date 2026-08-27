@@ -7,30 +7,41 @@
   <title>Fcom - The Digital Universe</title>
   <style>
     :root {
-      --bg: #050505;
-      --bg-secondary: #0b0b0f;
-      --surface: rgba(255, 255, 255, 0.06);
+      --bg: #050507;
+      --bg-soft: #0d1118;
+      --bg-secondary: var(--bg-soft);
+      --surface: rgba(255, 255, 255, 0.07);
       --surface-strong: rgba(255, 255, 255, 0.1);
-      --surface-soft: rgba(255, 255, 255, 0.03);
+      --surface-soft: rgba(255, 255, 255, 0.04);
       --text: rgba(255, 255, 255, 0.96);
-      --muted: rgba(255, 255, 255, 0.62);
+      --muted: rgba(255, 255, 255, 0.66);
+      --muted-soft: rgba(255, 255, 255, 0.5);
       --border: rgba(255, 255, 255, 0.12);
-      --blue: #3b82f6;
-      --purple: #8b5cf6;
+      --blue: #4da6ff;
+      --blue-strong: #2f7cf8;
       --cyan: #22d3ee;
-      --danger: #ff4d7a;
-      --shadow-xl: 0 40px 140px rgba(0, 0, 0, 0.55);
-      --shadow-glow: 0 0 70px rgba(59, 130, 246, 0.24);
-      --radius-xl: 28px;
-      --radius-lg: 22px;
+      --violet: #8b5cf6;
+      --purple: var(--violet);
+      --gold: #ffd54f;
+      --danger: #ff5e7e;
+      --success: #45d89a;
+      --shadow-lg: 0 28px 90px rgba(0, 0, 0, 0.48);
+      --shadow-md: 0 20px 44px rgba(0, 0, 0, 0.34);
+      --shadow-sm: 0 12px 28px rgba(0, 0, 0, 0.26);
+      --shadow-xl: var(--shadow-lg);
+      --shadow-glow: 0 0 70px rgba(77, 166, 255, 0.24);
+      --radius-xl: 30px;
+      --radius-lg: 24px;
       --radius-md: 18px;
-      --container: 1340px;
+      --radius-sm: 14px;
+      --radius-xs: 10px;
+      --container: 1360px;
       --transition-slow: 900ms cubic-bezier(0.2, 0.8, 0.1, 1);
       --transition-med: 520ms cubic-bezier(0.2, 0.8, 0.1, 1);
       --transition-fast: 280ms ease;
-      --font-display: "Clash Display", "SF Pro Display", "Inter Tight", "Segoe UI", sans-serif;
-      --font-body: "Satoshi", "General Sans", "Inter Tight", "Segoe UI", sans-serif;
-      --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+      --font-display: "Clash Display", "Inter Tight", "Segoe UI", sans-serif;
+      --font-body: "Satoshi", "Inter", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
     }
 
     * {
@@ -46,10 +57,10 @@
       min-height: 100vh;
       overflow-x: hidden;
       background:
-        radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.13), transparent 24%),
-        radial-gradient(circle at 80% 15%, rgba(139, 92, 246, 0.14), transparent 26%),
-        radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.12), transparent 30%),
-        linear-gradient(160deg, #040404 0%, #050507 50%, #06060b 100%);
+        radial-gradient(circle at 18% 18%, rgba(34, 211, 238, 0.11), transparent 26%),
+        radial-gradient(circle at 80% 16%, rgba(139, 92, 246, 0.14), transparent 28%),
+        radial-gradient(circle at 50% 78%, rgba(77, 166, 255, 0.11), transparent 30%),
+        linear-gradient(160deg, #040405 0%, #06070a 48%, #060811 100%);
       color: var(--text);
       font-family: var(--font-body);
       text-rendering: optimizeLegibility;
@@ -67,17 +78,17 @@
     }
 
     body::before {
-      opacity: 0.2;
+      opacity: 0.18;
       background-image:
         linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-      background-size: 80px 80px;
-      mask-image: radial-gradient(circle at center, black 45%, transparent 88%);
+      background-size: 78px 78px;
+      mask-image: radial-gradient(circle at center, black 46%, transparent 86%);
     }
 
     body::after {
-      opacity: 0.11;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+      opacity: 0.08;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
       mix-blend-mode: soft-light;
     }
 
@@ -127,7 +138,7 @@
       height: 26vw;
       bottom: -8vw;
       left: 38vw;
-      background: rgba(59, 130, 246, 0.15);
+      background: rgba(77, 166, 255, 0.15);
       animation: driftC 20s ease-in-out infinite alternate;
     }
 
@@ -146,7 +157,7 @@
     .cursor-glow {
       z-index: 18;
       background:
-        radial-gradient(circle 220px at var(--mx, 50%) var(--my, 50%), rgba(59, 130, 246, 0.14), transparent 60%),
+        radial-gradient(circle 220px at var(--mx, 50%) var(--my, 50%), rgba(77, 166, 255, 0.14), transparent 60%),
         radial-gradient(circle 120px at calc(var(--mx, 50%) + 40px) calc(var(--my, 50%) - 20px), rgba(34, 211, 238, 0.08), transparent 65%);
       mix-blend-mode: screen;
       transition: opacity var(--transition-fast);
@@ -158,7 +169,7 @@
       display: grid;
       place-items: center;
       background:
-        radial-gradient(circle at center, rgba(59, 130, 246, 0.14), transparent 34%),
+        radial-gradient(circle at center, rgba(77, 166, 255, 0.14), transparent 34%),
         linear-gradient(180deg, rgba(6, 6, 8, 0.88), rgba(5, 5, 5, 0.98));
       z-index: 30;
       transition: opacity 700ms ease, visibility 700ms ease;
@@ -195,6 +206,12 @@
       font-weight: 700;
     }
 
+    .lottie-splash {
+      width: min(38vw, 220px);
+      aspect-ratio: 1;
+      margin: -10px auto -18px;
+    }
+
     .loader-line {
       height: 2px;
       border-radius: 999px;
@@ -225,7 +242,7 @@
       padding: 14px 16px;
       background: rgba(10, 10, 14, 0.56);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 22px;
+      border-radius: var(--radius-lg);
       backdrop-filter: blur(20px) saturate(160%);
       box-shadow: var(--shadow-xl);
       z-index: 15;
@@ -245,10 +262,10 @@
       display: grid;
       place-items: center;
       background:
-        linear-gradient(135deg, rgba(59, 130, 246, 0.34), rgba(139, 92, 246, 0.18)),
+        linear-gradient(135deg, rgba(77, 166, 255, 0.34), rgba(139, 92, 246, 0.18)),
         rgba(255, 255, 255, 0.06);
       border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 30px rgba(59, 130, 246, 0.2);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 30px rgba(77, 166, 255, 0.2);
       font-family: var(--font-display);
       font-size: 22px;
       font-weight: 700;
@@ -332,9 +349,9 @@
     }
 
     .primary-button {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.34), rgba(139, 92, 246, 0.42));
+      background: linear-gradient(135deg, rgba(77, 166, 255, 0.34), rgba(139, 92, 246, 0.42));
       border-color: rgba(255, 255, 255, 0.12);
-      box-shadow: 0 14px 40px rgba(59, 130, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      box-shadow: 0 14px 40px rgba(77, 166, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
 
     .primary-button::after,
@@ -514,7 +531,7 @@
     .orb-a {
       width: 180px;
       height: 180px;
-      background: radial-gradient(circle, rgba(59, 130, 246, 0.8), transparent 70%);
+      background: radial-gradient(circle, rgba(77, 166, 255, 0.8), transparent 70%);
       top: 10%;
       right: 10%;
     }
@@ -530,7 +547,7 @@
 
     .beam {
       inset: 8% 22% 18% 18%;
-      background: conic-gradient(from 180deg at 50% 50%, rgba(59, 130, 246, 0.18), transparent 35%, rgba(34, 211, 238, 0.12), transparent 75%, rgba(139, 92, 246, 0.16));
+      background: conic-gradient(from 180deg at 50% 50%, rgba(77, 166, 255, 0.18), transparent 35%, rgba(34, 211, 238, 0.12), transparent 75%, rgba(139, 92, 246, 0.16));
       filter: blur(44px);
       opacity: 0.8;
     }
@@ -559,7 +576,7 @@
 
     .window {
       position: absolute;
-      border-radius: 28px;
+      border-radius: var(--radius-xl);
       padding: 20px;
       background: linear-gradient(180deg, rgba(10, 12, 18, 0.84), rgba(9, 10, 14, 0.55));
       --base-transform: translate3d(0, 0, 0);
@@ -673,7 +690,7 @@
 
     .panel {
       padding: 18px;
-      border-radius: 22px;
+      border-radius: var(--radius-lg);
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
     }
 
@@ -689,7 +706,7 @@
       position: absolute;
       inset: auto 18px 22px;
       height: 96px;
-      background: linear-gradient(180deg, rgba(59, 130, 246, 0.1), rgba(34, 211, 238, 0.24));
+      background: linear-gradient(180deg, rgba(77, 166, 255, 0.1), rgba(34, 211, 238, 0.24));
       clip-path: polygon(0 84%, 12% 70%, 24% 78%, 36% 54%, 48% 62%, 60% 28%, 72% 42%, 84% 20%, 100% 8%, 100% 100%, 0 100%);
       border-radius: 20px 20px 14px 14px;
       box-shadow: 0 0 30px rgba(34, 211, 238, 0.22);
@@ -727,7 +744,7 @@
       display: grid;
       place-items: center;
       border-radius: 999px;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(139, 92, 246, 0.28));
+      background: linear-gradient(135deg, rgba(77, 166, 255, 0.28), rgba(139, 92, 246, 0.28));
       border: 1px solid rgba(255, 255, 255, 0.1);
       margin-right: -10px;
       font-size: 12px;
@@ -752,7 +769,7 @@
 
     .bubble.is-accent {
       align-self: end;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.26), rgba(139, 92, 246, 0.3));
+      background: linear-gradient(135deg, rgba(77, 166, 255, 0.26), rgba(139, 92, 246, 0.3));
     }
 
     .section-header {
@@ -835,7 +852,7 @@
       inset: auto 18px 18px 18px;
       height: 2px;
       border-radius: 999px;
-      background: linear-gradient(90deg, rgba(59, 130, 246, 0), rgba(59, 130, 246, 0.88), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0));
+      background: linear-gradient(90deg, rgba(77, 166, 255, 0), rgba(77, 166, 255, 0.88), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0));
       filter: blur(0.2px);
       opacity: 0.85;
     }
@@ -890,7 +907,7 @@
     .creator-overview,
     .community-overview {
       padding: 28px;
-      border-radius: 28px;
+      border-radius: var(--radius-xl);
       min-height: 480px;
     }
 
@@ -928,7 +945,7 @@
 
     .page-pill.is-active {
       background: linear-gradient(135deg, var(--blue), var(--purple));
-      box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+      box-shadow: 0 0 30px rgba(77, 166, 255, 0.5);
     }
 
     .page-label {
@@ -950,7 +967,7 @@
 
     .footer-shell {
       padding: 28px;
-      border-radius: 28px;
+      border-radius: var(--radius-xl);
       display: grid;
       gap: 20px;
     }
@@ -1040,8 +1057,22 @@
 
     @media (max-width: 720px) {
       .topbar {
+        position: sticky;
         width: calc(100% - 16px);
+        top: 8px;
+        left: auto;
+        transform: none;
+        margin: 8px auto 0;
         padding: 12px;
+      }
+
+      .nav-tabs {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .nav-tab {
+        flex: 0 0 auto;
       }
 
       .topbar-actions {
@@ -1051,6 +1082,11 @@
       .topbar-actions a,
       .cta-row a {
         flex: 1 1 auto;
+      }
+
+      .page {
+        padding-top: 28px;
+        scroll-margin-top: 220px;
       }
 
       .hero-copy h1 {
@@ -1174,6 +1210,7 @@
     <div class="loader" id="loader">
       <div class="loader-stack">
         <div class="loader-kicker">Fcom system boot</div>
+        <div id="lottie-splash" class="lottie-splash" aria-hidden="true"></div>
         <div class="loader-mark">FCOM</div>
         <div class="loader-line"></div>
         <div class="muted">Syncing identities, spaces, and signals into one premium social layer.</div>
@@ -1197,7 +1234,7 @@
       </nav>
       <div class="topbar-actions">
         <a class="ghost-button magnetic" href="#0">Watch preview</a>
-        <a class="primary-button magnetic" href="index.html?open=dashboard" target="_top">Registration</a>
+                <a class="primary-button magnetic" href="index.html?open=register" target="_top">Registration</a>
       </div>
     </header>
 
@@ -1220,7 +1257,7 @@
                 <h1>Your Digital Universe Starts Here</h1>
                 <p>Fcom turns identity, content, communities, and creator income into one cinematic social layer. It feels less like a feed and more like a living operating system for presence.</p>
                 <div class="cta-row">
-                  <a class="primary-button magnetic" href="index.html?open=dashboard" target="_top">Registration</a>
+                  <a class="primary-button magnetic" href="index.html?open=register" target="_top">Registration</a>
                   <a class="ghost-button magnetic" href="#0">Explore the interface</a>
                 </div>
                 <div class="micro-stats">
@@ -1605,6 +1642,7 @@
     </main>
   </div>
 
+  <script src="vendor/lottie.min.js"></script>
   <script>
     const pageLabel = document.getElementById("pageLabel");
     const pageButtons = Array.from(document.querySelectorAll("[data-page-target]"));
@@ -1768,7 +1806,7 @@
             r: Math.random() * 2.4 + 0.6,
             vx: (Math.random() - 0.5) * 0.16,
             vy: (Math.random() - 0.5) * 0.16,
-            hue: i % 3 === 0 ? "59,130,246" : i % 3 === 1 ? "139,92,246" : "34,211,238"
+            hue: i % 3 === 0 ? "77,166,255" : i % 3 === 1 ? "139,92,246" : "34,211,238"
           });
         }
       };
@@ -1801,9 +1839,39 @@
       });
     }
 
-    setTimeout(() => {
+    const hideLoader = () => {
       loader.classList.add("is-hidden");
-    }, 1550);
+    };
+
+    const initSplashLoader = () => {
+      const container = document.getElementById("lottie-splash");
+      let hidden = false;
+      const done = () => {
+        if (hidden) return;
+        hidden = true;
+        hideLoader();
+      };
+
+      if (container && window.lottie && typeof window.lottie.loadAnimation === "function") {
+        try {
+          const animation = window.lottie.loadAnimation({
+            container,
+            renderer: "svg",
+            loop: false,
+            autoplay: true,
+            path: "assets/splash.json"
+          });
+          animation.addEventListener("complete", done);
+          animation.addEventListener("data_failed", done);
+        } catch (error) {
+          done();
+        }
+      }
+
+      setTimeout(done, 2100);
+    };
+
+    initSplashLoader();
 
     updatePageUI(0);
     revealPage(0);

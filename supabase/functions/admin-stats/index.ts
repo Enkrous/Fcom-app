@@ -2,6 +2,65 @@ import { ok, err, corsPrelight } from '../_shared/response.ts';
 import { getServiceClient } from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 
+type UserRow = {
+  id: string;
+  nickname: string | null;
+  fullName: string | null;
+  school: string | null;
+  role: string | null;
+  status: string | null;
+  createdAt: string | null;
+  avatarUrl?: string | null;
+};
+
+type MessageRow = {
+  time: string | null;
+  type: string | null;
+  groupId: string | null;
+};
+
+type GroupRow = {
+  id: string;
+  name: string;
+  school: string | null;
+  type: string | null;
+  createdAt: string | null;
+  avatarUrl?: string | null;
+};
+
+type GroupMemberRow = {
+  groupId: string;
+  role: string | null;
+};
+
+type ReportRow = {
+  status: string | null;
+  createdAt: string | null;
+};
+
+type BlockRow = {
+  createdAt: string | null;
+};
+
+function buildDailyBuckets(days: number) {
+  const now = new Date();
+  const startOfTodayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return Array.from({ length: days }, (_, index) => {
+    const day = new Date(startOfTodayUtc);
+    day.setUTCDate(startOfTodayUtc.getUTCDate() - (days - index - 1));
+    const key = day.toISOString().slice(0, 10);
+    const label = `${String(day.getUTCDate()).padStart(2, '0')}.${String(day.getUTCMonth() + 1).padStart(2, '0')}`;
+    return { key, label, count: 0 };
+  });
+}
+
+function incrementBucket(buckets: Array<{ key: string; label: string; count: number }>, value: string | null | undefined) {
+  if (!value) return;
+  const key = new Date(value).toISOString().slice(0, 10);
+  const bucket = buckets.find((item) => item.key === key);
+  if (bucket) bucket.count += 1;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'GET') return err('method_not_allowed', 405);
@@ -28,79 +87,50 @@ Deno.serve(async (req: Request) => {
   if (caller.role !== 'admin') return err('admin_only', 403);
   if (caller.status !== 'approved') return err('forbidden', 403);
 
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const nowMs = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const since24hMs = nowMs - dayMs;
+  const since7dMs = nowMs - dayMs * 7;
 
   const [
-    usersTotalRes,
-    usersApprovedRes,
-    usersPendingRes,
-    usersRejectedRes,
-    usersAdminRes,
-    messagesTotalRes,
-    messages24hRes,
-    images24hRes,
-    groupsTotalRes,
-    publicGroupsRes,
-    privateGroupsRes,
-    invitesPendingRes,
-    recentUsersRes,
-    schoolRowsRes,
-    groupRowsRes,
+    usersRes,
+    messagesRes,
+    groupsRes,
     memberRowsRes,
-    groupMessageRowsRes,
+    invitesRes,
+    reportsRes,
+    blocksRes,
   ] = await Promise.all([
-    supabase.from('users').select('*', { count: 'exact', head: true }),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'admin'),
-    supabase.from('messages').select('*', { count: 'exact', head: true }),
-    supabase.from('messages').select('*', { count: 'exact', head: true }).gte('time', since24h),
-    supabase.from('messages').select('*', { count: 'exact', head: true }).eq('type', 'image').gte('time', since24h),
-    supabase.from('chat_groups').select('*', { count: 'exact', head: true }),
-    supabase.from('chat_groups').select('*', { count: 'exact', head: true }).eq('type', 'school_public'),
-    supabase.from('chat_groups').select('*', { count: 'exact', head: true }).eq('type', 'private'),
-    supabase.from('group_invites').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase
       .from('users')
-      .select('id, nickname, "fullName", school, role, status, "createdAt"')
-      .order('createdAt', { ascending: false })
-      .limit(12),
+      .select('id, nickname, "fullName", school, role, status, "createdAt", "avatarUrl"'),
     supabase
-      .from('users')
-      .select('school, status'),
+      .from('messages')
+      .select('time, type, "groupId"'),
     supabase
       .from('chat_groups')
-      .select('id, name, school, type, "createdAt"')
-      .order('createdAt', { ascending: false })
-      .limit(20),
+      .select('id, name, school, type, "createdAt", "avatarUrl"')
+      .order('createdAt', { ascending: false }),
     supabase
       .from('group_members')
       .select('"groupId", role'),
     supabase
-      .from('messages')
-      .select('"groupId", type')
-      .not('groupId', 'is', null),
+      .from('group_invites')
+      .select('status'),
+    supabase
+      .from('user_reports')
+      .select('status, "createdAt"'),
+    supabase
+      .from('user_blocks')
+      .select('"createdAt"'),
   ]);
 
   const errors = [
-    usersTotalRes.error,
-    usersApprovedRes.error,
-    usersPendingRes.error,
-    usersRejectedRes.error,
-    usersAdminRes.error,
-    messagesTotalRes.error,
-    messages24hRes.error,
-    images24hRes.error,
-    groupsTotalRes.error,
-    publicGroupsRes.error,
-    privateGroupsRes.error,
-    invitesPendingRes.error,
-    recentUsersRes.error,
-    schoolRowsRes.error,
-    groupRowsRes.error,
+    usersRes.error,
+    messagesRes.error,
+    groupsRes.error,
     memberRowsRes.error,
-    groupMessageRowsRes.error,
+    invitesRes.error,
   ].filter(Boolean);
 
   if (errors.length > 0) {
@@ -108,8 +138,48 @@ Deno.serve(async (req: Request) => {
     return err('fetch_failed', 500);
   }
 
+  const users = (usersRes.data ?? []) as UserRow[];
+  const messages = (messagesRes.data ?? []) as MessageRow[];
+  const groups = (groupsRes.data ?? []) as GroupRow[];
+  const members = (memberRowsRes.data ?? []) as GroupMemberRow[];
+  const invites = invitesRes.data ?? [];
+  if (reportsRes.error) console.warn('admin stats reports skipped:', reportsRes.error);
+  if (blocksRes.error) console.warn('admin stats blocks skipped:', blocksRes.error);
+  const reports = (reportsRes.error ? [] : (reportsRes.data ?? [])) as ReportRow[];
+  const blocks = (blocksRes.error ? [] : (blocksRes.data ?? [])) as BlockRow[];
+
+  const approvedUsers = users.filter((user) => user.status === 'approved').length;
+  const pendingUsers = users.filter((user) => user.status === 'pending').length;
+  const rejectedUsers = users.filter((user) => user.status === 'rejected').length;
+  const adminUsers = users.filter((user) => user.role === 'admin').length;
+  const newUsers24h = users.filter((user) => {
+    const createdAt = user.createdAt ? new Date(user.createdAt).getTime() : 0;
+    return createdAt >= since24hMs;
+  }).length;
+  const newUsers7d = users.filter((user) => {
+    const createdAt = user.createdAt ? new Date(user.createdAt).getTime() : 0;
+    return createdAt >= since7dMs;
+  }).length;
+  const newApplications24h = users.filter((user) => {
+    const createdAt = user.createdAt ? new Date(user.createdAt).getTime() : 0;
+    return user.status === 'pending' && createdAt >= since24hMs;
+  }).length;
+
+  const messages24h = messages.filter((message) => {
+    const time = message.time ? new Date(message.time).getTime() : 0;
+    return time >= since24hMs;
+  }).length;
+  const images24h = messages.filter((message) => {
+    const time = message.time ? new Date(message.time).getTime() : 0;
+    return message.type === 'image' && time >= since24hMs;
+  }).length;
+  const reports24h = reports.filter((report) => {
+    const createdAt = report.createdAt ? new Date(report.createdAt).getTime() : 0;
+    return createdAt >= since24hMs;
+  }).length;
+
   const schoolMap = new Map<string, { school: string; totalUsers: number; approvedUsers: number; pendingUsers: number }>();
-  (schoolRowsRes.data ?? []).forEach((row: { school: string | null; status: string | null }) => {
+  users.forEach((row) => {
     const school = String(row.school ?? '').trim();
     if (!school) return;
     const current = schoolMap.get(school) ?? {
@@ -125,7 +195,7 @@ Deno.serve(async (req: Request) => {
   });
 
   const memberStats = new Map<string, { memberCount: number; adminCount: number }>();
-  (memberRowsRes.data ?? []).forEach((row: { groupId: string; role: string }) => {
+  members.forEach((row) => {
     const current = memberStats.get(row.groupId) ?? { memberCount: 0, adminCount: 0 };
     current.memberCount += 1;
     if (row.role === 'admin') current.adminCount += 1;
@@ -133,36 +203,62 @@ Deno.serve(async (req: Request) => {
   });
 
   const messageStats = new Map<string, { messageCount: number; imageCount: number }>();
-  (groupMessageRowsRes.data ?? []).forEach((row: { groupId: string; type: string | null }) => {
+  messages.forEach((row) => {
+    if (!row.groupId) return;
     const current = messageStats.get(row.groupId) ?? { messageCount: 0, imageCount: 0 };
     current.messageCount += 1;
     if (row.type === 'image') current.imageCount += 1;
     messageStats.set(row.groupId, current);
   });
 
+  const registrationsByDay = buildDailyBuckets(7);
+  const messagesByDay = buildDailyBuckets(7);
+
+  users.forEach((user) => incrementBucket(registrationsByDay, user.createdAt));
+  messages.forEach((message) => incrementBucket(messagesByDay, message.time));
+
+  const schools = [...schoolMap.values()]
+    .sort((a, b) => {
+      if (b.totalUsers !== a.totalUsers) return b.totalUsers - a.totalUsers;
+      return a.school.localeCompare(b.school, 'ru');
+    });
+
   return ok({
     summary: {
-      totalUsers: usersTotalRes.count ?? 0,
-      approvedUsers: usersApprovedRes.count ?? 0,
-      pendingUsers: usersPendingRes.count ?? 0,
-      rejectedUsers: usersRejectedRes.count ?? 0,
-      adminUsers: usersAdminRes.count ?? 0,
-      totalMessages: messagesTotalRes.count ?? 0,
-      messages24h: messages24hRes.count ?? 0,
-      images24h: images24hRes.count ?? 0,
-      totalGroups: groupsTotalRes.count ?? 0,
-      publicGroups: publicGroupsRes.count ?? 0,
-      privateGroups: privateGroupsRes.count ?? 0,
-      pendingInvites: invitesPendingRes.count ?? 0,
+      totalUsers: users.length,
+      approvedUsers,
+      pendingUsers,
+      rejectedUsers,
+      adminUsers,
+      newUsers24h,
+      newUsers7d,
+      newApplications24h,
+      totalMessages: messages.length,
+      messages24h,
+      images24h,
+      totalGroups: groups.length,
+      publicGroups: groups.filter((group) => group.type === 'school_public').length,
+      privateGroups: groups.filter((group) => group.type === 'private').length,
+      pendingInvites: invites.filter((invite: { status?: string | null }) => invite.status === 'pending').length,
+      totalReports: reports.length,
+      openReports: reports.filter((report) => report.status === 'open').length,
+      reports24h,
+      totalBlocks: blocks.length,
     },
-    schools: [...schoolMap.values()]
-      .sort((a, b) => {
-        if (b.totalUsers !== a.totalUsers) return b.totalUsers - a.totalUsers;
-        return a.school.localeCompare(b.school, 'ru');
-      })
+    charts: {
+      registrationsByDay,
+      messagesByDay,
+      topSchoolsByUsers: schools.slice(0, 6).map((school) => ({
+        label: school.school,
+        value: school.totalUsers,
+        pendingUsers: school.pendingUsers,
+      })),
+    },
+    schools: schools.slice(0, 12),
+    recentUsers: [...users]
+      .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
       .slice(0, 12),
-    recentUsers: recentUsersRes.data ?? [],
-    groups: (groupRowsRes.data ?? []).map((group: { id: string; name: string; school: string; type: string; createdAt: string }) => ({
+    groups: groups.slice(0, 20).map((group) => ({
       ...group,
       memberCount: memberStats.get(group.id)?.memberCount ?? 0,
       adminCount: memberStats.get(group.id)?.adminCount ?? 0,

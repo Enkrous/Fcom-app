@@ -3,6 +3,7 @@ import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { ensureSchoolPublicGroup, getGroupAccess } from '../_shared/groups.ts';
 import { isSameSchool } from '../_shared/school.ts';
+import { getBlockedPeerIds, hasUserBlock } from '../_shared/blocks.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
@@ -109,8 +110,13 @@ Deno.serve(async (req: Request) => {
       return err('fetch_failed', 500);
     }
 
-    const inviteGroupIds = [...new Set((invites ?? []).map((invite: { groupId: string }) => invite.groupId))];
-    const inviteActorIds = [...new Set((invites ?? []).map((invite: { invitedBy: string }) => invite.invitedBy))];
+    const blockedPeerIds = await getBlockedPeerIds(supabase, caller.id);
+    const visibleInvites = (invites ?? []).filter((invite: { invitedBy: string }) =>
+      !blockedPeerIds.has(invite.invitedBy),
+    );
+
+    const inviteGroupIds = [...new Set(visibleInvites.map((invite: { groupId: string }) => invite.groupId))];
+    const inviteActorIds = [...new Set(visibleInvites.map((invite: { invitedBy: string }) => invite.invitedBy))];
 
     const inviteGroups = inviteGroupIds.length
       ? await supabase
@@ -153,7 +159,7 @@ Deno.serve(async (req: Request) => {
       };
     });
 
-    const serializedInvites = (invites ?? []).map((invite: { id: string; groupId: string; invitedBy: string; createdAt: string }) => ({
+    const serializedInvites = visibleInvites.map((invite: { id: string; groupId: string; invitedBy: string; createdAt: string }) => ({
       id: invite.id,
       createdAt: invite.createdAt,
       group: inviteGroupMap[invite.groupId] ?? null,
@@ -222,8 +228,12 @@ Deno.serve(async (req: Request) => {
         return err('group_create_failed', 500);
       }
 
+      const blockedPeerIds = await getBlockedPeerIds(supabase, caller.id);
       const validInvitees = (candidates ?? []).filter((user: { id: string; school: string; status: string }) =>
-        user.id !== caller.id && user.status === 'approved' && isSameSchool(user.school, caller.school),
+        user.id !== caller.id
+          && user.status === 'approved'
+          && isSameSchool(user.school, caller.school)
+          && !blockedPeerIds.has(user.id),
       );
 
       if (validInvitees.length > 0) {
@@ -256,7 +266,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: invite, error: inviteErr } = await supabase
       .from('group_invites')
-      .select('id, "groupId", "invitedUserId", status')
+      .select('id, "groupId", "invitedUserId", "invitedBy", status')
       .eq('id', inviteId)
       .eq('invitedUserId', caller.id)
       .maybeSingle();
@@ -266,6 +276,9 @@ Deno.serve(async (req: Request) => {
       return err('invite_not_found', 404);
     }
     if (!invite || invite.status !== 'pending') return err('invite_not_found', 404);
+    if (decision === 'accept' && await hasUserBlock(supabase, caller.id, invite.invitedBy)) {
+      return err('user_blocked', 403);
+    }
 
     const nextStatus = decision === 'accept' ? 'accepted' : 'declined';
     const { error: updateInviteErr } = await supabase

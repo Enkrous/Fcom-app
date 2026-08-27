@@ -30,8 +30,10 @@ const API = (() => {
   const SYNC_INTERVAL  = 2000;
 
   // ─── TOKEN STORAGE ────────────────────────────────────────────────
-  const TOKEN_KEY     = 'fcom_token';      // long-lived session JWT (after login)
-  const REG_TOKEN_KEY = 'fcom_reg_token';  // 1-hour JWT returned after /register
+  const TOKEN_KEY              = 'fcom_token';          // long-lived session JWT (after login)
+  const REG_TOKEN_KEY          = 'fcom_reg_token';      // 1-hour JWT returned after /register
+  const TOKEN_MAP_KEY          = 'fcom_account_tokens'; // { [userId]: sessionJwt }
+  const ACTIVE_TOKEN_USER_KEY  = 'fcom_token_user';     // userId bound to TOKEN_KEY
 
   let _syncTimer = null;
   let _syncInFlight = null;
@@ -42,6 +44,61 @@ const API = (() => {
   function getRegToken()  { return localStorage.getItem(REG_TOKEN_KEY); }
   function setRegToken(t) { t ? localStorage.setItem(REG_TOKEN_KEY, t) : localStorage.removeItem(REG_TOKEN_KEY); }
   function hasSessionToken() { return Boolean(getToken() || getRegToken()); }
+
+  function _loadTokenMap() {
+    try {
+      const raw = localStorage.getItem(TOKEN_MAP_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function _saveTokenMap(map) {
+    const entries = Object.entries(map || {}).filter(([, token]) => typeof token === 'string' && token);
+    if (entries.length === 0) {
+      localStorage.removeItem(TOKEN_MAP_KEY);
+      return;
+    }
+    localStorage.setItem(TOKEN_MAP_KEY, JSON.stringify(Object.fromEntries(entries)));
+  }
+
+  function getTokenForUser(userId) {
+    if (!userId) return null;
+    const token = _loadTokenMap()[userId];
+    return typeof token === 'string' && token ? token : null;
+  }
+
+  function setTokenForUser(userId, token) {
+    if (!userId || !token) return;
+    const tokens = _loadTokenMap();
+    if (tokens[userId] === token) return;
+    tokens[userId] = token;
+    _saveTokenMap(tokens);
+  }
+
+  function removeTokenForUser(userId) {
+    if (!userId) return;
+    const tokens = _loadTokenMap();
+    if (!(userId in tokens)) return;
+    delete tokens[userId];
+    _saveTokenMap(tokens);
+  }
+
+  function getActiveTokenUserId() {
+    return localStorage.getItem(ACTIVE_TOKEN_USER_KEY);
+  }
+
+  function setActiveSession(userId, token) {
+    setToken(token);
+    if (token && userId) {
+      setTokenForUser(userId, token);
+      localStorage.setItem(ACTIVE_TOKEN_USER_KEY, userId);
+      return;
+    }
+    localStorage.removeItem(ACTIVE_TOKEN_USER_KEY);
+  }
 
   // ─── DEVICE FINGERPRINT ───────────────────────────────────────────
   async function getDeviceFingerprint() {
@@ -124,12 +181,16 @@ const API = (() => {
       return { ok: false, changed: false, error: meRes.error || 'sync_failed' };
     }
 
-    const currentId = Credo.getCurrentUserId();
+    let currentId = Credo.getCurrentUserId();
     const previous = currentId ? Credo.getUserById(currentId) : null;
     const merged = _mergeCurrentUser(meRes.user);
     const changed = JSON.stringify(previous) !== JSON.stringify(merged);
 
     if (merged?.id) {
+      const activeToken = getToken();
+      if (activeToken) {
+        setActiveSession(merged.id, activeToken);
+      }
       Credo.setCurrentUserId(merged.id);
       Credo.markDeviceAccount(merged.id);
     }
@@ -195,6 +256,16 @@ const API = (() => {
       invitesChanged,
       groupChatsChanged,
     };
+  }
+
+  async function _syncBlocksFromServer() {
+    const blocksRes = await _call('/block-user');
+    if (!blocksRes.ok) {
+      return { ok: false, changed: false, error: blocksRes.error || 'blocks_sync_failed' };
+    }
+
+    const changed = _writeJSONIfChanged('credo_user_blocks', blocksRes.blocks || []);
+    return { ok: true, changed, blocksChanged: changed };
   }
 
   // ─── SYNC: populate localStorage from server ──────────────────────
@@ -313,7 +384,7 @@ const API = (() => {
 
     if (_syncInFlight) return _syncInFlight;
 
-    const currentId = Credo.getCurrentUserId();
+    let currentId = Credo.getCurrentUserId();
     const currentUser = currentId ? Credo.getUserById(currentId) : null;
     if (!currentUser) {
       return { ok: false, changed: false, error: 'missing_current_user' };
@@ -328,14 +399,15 @@ const API = (() => {
         return meResult;
       }
 
-      const [serverResult, groupsResult] = await Promise.all([
+      const [serverResult, groupsResult, blocksResult] = await Promise.all([
         _syncFromServer(meResult.user),
         _syncGroupsFromServer(),
+        _syncBlocksFromServer(),
       ]);
       return {
         ok: serverResult.ok && groupsResult.ok,
         error: serverResult.error || groupsResult.error,
-        changed: Boolean(meResult.changed || serverResult.changed || groupsResult.changed),
+        changed: Boolean(meResult.changed || serverResult.changed || groupsResult.changed || blocksResult.changed),
       };
     })()
       .then((result) => {
@@ -416,9 +488,11 @@ const API = (() => {
     const _origSend = Credo.sendMessage.bind(Credo);
     _origSendMessage = _origSend;
     Credo.sendMessage = function(fromId, toId, text) {
-      _origSend(fromId, toId, text);
+      const localResult = _origSend(fromId, toId, text);
+      if (localResult?.ok === false) return localResult;
       _call('/messages', { method: 'POST', body: { toId, text } })
         .catch(e => console.warn('[API] sendMessage backend error:', e));
+      return localResult;
     };
   }
 
@@ -526,12 +600,16 @@ const API = (() => {
     if (!result.ok) return result;
 
     // Store session token and sync all data into localStorage
-    setToken(result.token);
+    setActiveSession(result.user.id, result.token);
     Credo.setCurrentUserId(result.user.id);
     Credo.markDeviceAccount(result.user.id);
     const seededUser = _mergeCurrentUser(result.user, { passwordHash: '__set__' });
 
     await _syncFromServer(seededUser);
+    await Promise.allSettled([
+      _syncGroupsFromServer(),
+      _syncBlocksFromServer(),
+    ]);
     Credo.updateUser(result.user.id, { passwordHash: '__set__' });
     startLiveSync();
 
@@ -587,7 +665,11 @@ const API = (() => {
         // Non-fatal — clear local state regardless of network outcome.
       }
     }
-    setToken(null);
+    const activeTokenUserId = getActiveTokenUserId();
+    if (activeTokenUserId) {
+      removeTokenForUser(activeTokenUserId);
+    }
+    setActiveSession(null, null);
     setRegToken(null);
     stopLiveSync();
     Credo.setCurrentUserId(null);
@@ -597,6 +679,64 @@ const API = (() => {
   // ─── API.approve / reject ─────────────────────────────────────────
   // These delegate to the (already monkey-patched) Credo methods,
   // preserving the original call sites in app.js that use Credo directly.
+  async function switchAccount(userId) {
+    if (!FUNCTIONS_BASE) {
+      Credo.setCurrentUserId(userId || null);
+      if (userId) Credo.markDeviceAccount(userId);
+      return { ok: true, user: userId ? Credo.getUserById(userId) : null };
+    }
+
+    if (!userId) {
+      await logout();
+      return { ok: true, user: null };
+    }
+
+    const nextUser = Credo.getUserById(userId);
+    if (!nextUser) return { ok: false, error: 'user_not_found' };
+
+    const nextToken = getTokenForUser(userId);
+    if (!nextToken) return { ok: false, error: 'login_required' };
+
+    const previousCurrentUserId = Credo.getCurrentUserId();
+    const previousTokenUserId = getActiveTokenUserId();
+    const previousToken = getToken();
+
+    setActiveSession(userId, nextToken);
+    Credo.setCurrentUserId(userId);
+    Credo.markDeviceAccount(userId);
+
+    const syncResult = await syncNow();
+    if (syncResult?.ok) {
+      startLiveSync();
+      return {
+        ok: true,
+        user: Credo.getUserById(Credo.getCurrentUserId()) || nextUser,
+      };
+    }
+
+    if (['invalid_token', 'missing_token', 'session_revoked', 'token_expired', 'user_not_found'].includes(syncResult?.error)) {
+      removeTokenForUser(userId);
+    }
+
+    if (previousToken) {
+      const restoreUserId = previousTokenUserId || previousCurrentUserId;
+      if (restoreUserId) {
+        setActiveSession(restoreUserId, previousToken);
+      } else {
+        localStorage.removeItem(ACTIVE_TOKEN_USER_KEY);
+        setToken(previousToken);
+      }
+    } else {
+      setActiveSession(null, null);
+    }
+
+    Credo.setCurrentUserId(previousCurrentUserId || null);
+    if (previousToken) startLiveSync();
+    else stopLiveSync();
+
+    return { ok: false, error: syncResult?.error || 'switch_failed' };
+  }
+
   function approve(userId) {
     return Credo.approveUser(userId);
   }
@@ -666,6 +806,176 @@ const API = (() => {
     return result;
   }
 
+  async function syncBlocks() {
+    if (!FUNCTIONS_BASE) {
+      return { ok: true, changed: false, blocks: Credo.getUserBlocks ? Credo.getUserBlocks() : [] };
+    }
+
+    try {
+      const result = await _call('/block-user');
+      if (result.ok && typeof Credo.saveUserBlocks === 'function') {
+        Credo.saveUserBlocks(result.blocks || []);
+      }
+      return result;
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+  }
+
+  async function blockUser(targetId) {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!currentUser) return { ok: false, error: 'not_authenticated' };
+
+    if (!FUNCTIONS_BASE) {
+      return Credo.blockUserLocal(currentUser.id, targetId);
+    }
+
+    let result;
+    try {
+      result = await _call('/block-user', {
+        method: 'POST',
+        body: { targetId, action: 'block' },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    if (result.ok && typeof Credo.saveUserBlocks === 'function') {
+      Credo.saveUserBlocks(result.blocks || []);
+      _emitSync({ ok: true, changed: true, blocksChanged: true });
+    }
+    return result;
+  }
+
+  async function unblockUser(targetId) {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!currentUser) return { ok: false, error: 'not_authenticated' };
+
+    if (!FUNCTIONS_BASE) {
+      return Credo.unblockUserLocal(currentUser.id, targetId);
+    }
+
+    let result;
+    try {
+      result = await _call('/block-user', {
+        method: 'POST',
+        body: { targetId, action: 'unblock' },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    if (result.ok && typeof Credo.saveUserBlocks === 'function') {
+      Credo.saveUserBlocks(result.blocks || []);
+      _emitSync({ ok: true, changed: true, blocksChanged: true });
+    }
+    return result;
+  }
+
+  async function reportUser(targetId, reason, details = '') {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!currentUser) return { ok: false, error: 'not_authenticated' };
+
+    if (!FUNCTIONS_BASE) {
+      const reports = _loadLocalReports();
+      const report = {
+        id: Credo.generateId(),
+        reporterId: currentUser.id,
+        targetId,
+        reason,
+        details: String(details || '').trim(),
+        status: 'open',
+        createdAt: new Date().toISOString(),
+        reporter: currentUser,
+        target: Credo.getUserById(targetId),
+      };
+      reports.unshift(report);
+      localStorage.setItem('credo_user_reports', JSON.stringify(reports));
+      return { ok: true, report };
+    }
+
+    try {
+      return await _call('/report-user', {
+        method: 'POST',
+        body: { targetId, reason, details },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+  }
+
+  async function listReports(status = 'open') {
+    if (!FUNCTIONS_BASE) {
+      const reports = _serializeLocalReports(_loadLocalReports());
+      const filtered = status === 'all'
+        ? reports
+        : reports.filter((report) => report.status === status);
+      return { ok: true, reports: filtered, summary: _summarizeReports(filtered) };
+    }
+
+    try {
+      return await _call(`/reports-admin?status=${encodeURIComponent(status)}`);
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+  }
+
+  async function reviewReport(reportId, action) {
+    if (!FUNCTIONS_BASE) {
+      const nextStatus = { review: 'reviewed', reviewed: 'reviewed', dismiss: 'dismissed', dismissed: 'dismissed', action: 'actioned', actioned: 'actioned' }[action];
+      if (!nextStatus) return { ok: false, error: 'invalid_action' };
+
+      const reports = _loadLocalReports();
+      const index = reports.findIndex((report) => report.id === reportId);
+      if (index === -1) return { ok: false, error: 'report_not_found' };
+      reports[index] = {
+        ...reports[index],
+        status: nextStatus,
+        reviewedBy: Credo.getCurrentUserId(),
+        reviewedAt: new Date().toISOString(),
+      };
+      localStorage.setItem('credo_user_reports', JSON.stringify(reports));
+      return { ok: true, report: _serializeLocalReports([reports[index]])[0] };
+    }
+
+    try {
+      return await _call('/reports-admin', {
+        method: 'POST',
+        body: { reportId, action },
+      });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+  }
+
+  function _loadLocalReports() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('credo_user_reports') || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function _serializeLocalReports(reports) {
+    return reports.map((report) => ({
+      ...report,
+      reporter: report.reporter || Credo.getUserById(report.reporterId),
+      target: report.target || Credo.getUserById(report.targetId),
+      reviewer: report.reviewedBy ? Credo.getUserById(report.reviewedBy) : null,
+    }));
+  }
+
+  function _summarizeReports(reports) {
+    return {
+      total: reports.length,
+      open: reports.filter((report) => report.status === 'open').length,
+      reviewed: reports.filter((report) => report.status === 'reviewed').length,
+      dismissed: reports.filter((report) => report.status === 'dismissed').length,
+      actioned: reports.filter((report) => report.status === 'actioned').length,
+    };
+  }
+
   async function adminStats() {
     if (!FUNCTIONS_BASE) {
       const users = Credo.getUsers();
@@ -676,6 +986,61 @@ const API = (() => {
         ...Object.values(directChats).flat(),
         ...Object.values(groupChats).flat(),
       ];
+      const reports = _loadLocalReports();
+      const blocks = typeof Credo.getUserBlocks === 'function' ? Credo.getUserBlocks() : [];
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const since24h = now - dayMs;
+      const since7d = now - dayMs * 7;
+      const makeDailyBuckets = (days) => {
+        const buckets = [];
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - (days - 1));
+        for (let index = 0; index < days; index += 1) {
+          const day = new Date(start);
+          day.setDate(start.getDate() + index);
+          const key = day.toISOString().slice(0, 10);
+          buckets.push({
+            key,
+            label: `${String(day.getDate()).padStart(2, '0')}.${String(day.getMonth() + 1).padStart(2, '0')}`,
+            count: 0,
+          });
+        }
+        return buckets;
+      };
+      const registrationsByDay = makeDailyBuckets(7);
+      const messagesByDay = makeDailyBuckets(7);
+      const bucketRegistration = (value, buckets) => {
+        if (!value) return;
+        const key = new Date(value).toISOString().slice(0, 10);
+        const bucket = buckets.find((item) => item.key === key);
+        if (bucket) bucket.count += 1;
+      };
+      const schoolMap = new Map();
+
+      users.forEach((user) => {
+        bucketRegistration(user.createdAt, registrationsByDay);
+        const school = String(user.school || '').trim();
+        if (!school) return;
+        const current = schoolMap.get(school) || {
+          school,
+          totalUsers: 0,
+          approvedUsers: 0,
+          pendingUsers: 0,
+        };
+        current.totalUsers += 1;
+        if (user.status === 'approved') current.approvedUsers += 1;
+        if (user.status === 'pending') current.pendingUsers += 1;
+        schoolMap.set(school, current);
+      });
+
+      allMessages.forEach((message) => {
+        bucketRegistration(message.time, messagesByDay);
+      });
+
+      const schools = [...schoolMap.values()]
+        .sort((a, b) => b.totalUsers - a.totalUsers || a.school.localeCompare(b.school, 'ru'));
 
       return {
         ok: true,
@@ -685,15 +1050,31 @@ const API = (() => {
           pendingUsers: users.filter((user) => user.status === 'pending').length,
           rejectedUsers: users.filter((user) => user.status === 'rejected').length,
           adminUsers: users.filter((user) => user.role === 'admin').length,
+          newUsers24h: users.filter((user) => new Date(user.createdAt || 0).getTime() >= since24h).length,
+          newUsers7d: users.filter((user) => new Date(user.createdAt || 0).getTime() >= since7d).length,
+          newApplications24h: users.filter((user) => user.status === 'pending' && new Date(user.createdAt || 0).getTime() >= since24h).length,
           totalMessages: allMessages.length,
-          messages24h: allMessages.filter((message) => Date.now() - new Date(message.time).getTime() <= 24 * 60 * 60 * 1000).length,
-          images24h: allMessages.filter((message) => message.type === 'image' && Date.now() - new Date(message.time).getTime() <= 24 * 60 * 60 * 1000).length,
+          messages24h: allMessages.filter((message) => new Date(message.time || 0).getTime() >= since24h).length,
+          images24h: allMessages.filter((message) => message.type === 'image' && new Date(message.time || 0).getTime() >= since24h).length,
           totalGroups: groups.length,
           publicGroups: groups.filter((group) => group.type === 'school_public').length,
           privateGroups: groups.filter((group) => group.type === 'private').length,
           pendingInvites: Credo.getGroupInvites().length,
+          totalReports: reports.length,
+          openReports: reports.filter((report) => report.status === 'open').length,
+          reports24h: reports.filter((report) => new Date(report.createdAt || 0).getTime() >= since24h).length,
+          totalBlocks: blocks.length,
         },
-        schools: [],
+        charts: {
+          registrationsByDay,
+          messagesByDay,
+          topSchoolsByUsers: schools.slice(0, 6).map((school) => ({
+            label: school.school,
+            value: school.totalUsers,
+            pendingUsers: school.pendingUsers,
+          })),
+        },
+        schools: schools.slice(0, 12),
         recentUsers: [...users].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 12),
         groups,
       };
@@ -754,7 +1135,11 @@ const API = (() => {
         const messages = Credo.getGroupMessages(groupId);
         return { ok: true, message: messages[messages.length - 1] || null };
       }
-      Credo.sendMessage(fromId, toId, text);
+      if (typeof Credo.isUserBlockedFor === 'function' && Credo.isUserBlockedFor(fromId, toId)) {
+        return { ok: false, error: 'user_blocked' };
+      }
+      const localResult = Credo.sendMessage(fromId, toId, text);
+      if (localResult?.ok === false) return localResult;
       const messages = Credo.getChatMessages(fromId, toId);
       return { ok: true, message: messages[messages.length - 1] || null };
     }
@@ -802,6 +1187,9 @@ const API = (() => {
     }
 
     const originalSend = _origSendMessage || Credo.sendMessage.bind(Credo);
+    if (typeof Credo.isUserBlockedFor === 'function' && Credo.isUserBlockedFor(fromId, toId)) {
+      return { ok: false, error: 'user_blocked' };
+    }
     const chatKey = Credo.chatKey(fromId, toId);
     const previousMessages = Credo.getChatMessages(fromId, toId).slice();
     const usersSnapshot = Credo.getUsers().map((user) => ({
@@ -846,6 +1234,17 @@ const API = (() => {
     const currentId = Credo.getCurrentUserId();
     if (!currentId) return;
 
+    const storedToken = getTokenForUser(currentId);
+    const activeTokenUserId = getActiveTokenUserId();
+    if (storedToken) {
+      if (getToken() !== storedToken || activeTokenUserId !== currentId) {
+        setActiveSession(currentId, storedToken);
+      }
+    } else if (activeTokenUserId && activeTokenUserId !== currentId) {
+      Credo.setCurrentUserId(activeTokenUserId);
+      currentId = activeTokenUserId;
+    }
+
     Credo.markDeviceAccount(currentId);
 
     let currentUser = Credo.getUserById(currentId);
@@ -872,8 +1271,15 @@ const API = (() => {
     createGroup,
     respondGroupInvite,
     leaveGroup,
+    syncBlocks,
+    blockUser,
+    unblockUser,
+    reportUser,
+    listReports,
+    reviewReport,
     uploadMedia,
     adminStats,
+    switchAccount,
     syncNow,
     startLiveSync,
     stopLiveSync,

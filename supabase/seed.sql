@@ -1,13 +1,14 @@
 -- supabase/seed.sql
 -- Development / staging seed data for Fcom / Кредо.
+-- Never run this file in production.
 --
 -- Purpose: provides a ready-to-use set of users, messages, and ratings so that
 -- every feature can be exercised immediately after running migrations.
 --
 -- HOW TO USE
 --   Supabase CLI:  supabase db reset        (applies migrations + this seed)
---   SQL Editor:    paste & run after all 19 migrations are applied
---   Production:    DO NOT run — this file is for dev/staging only
+--   SQL Editor:    paste & run only after the required schema migrations are applied
+--   Production:    DO NOT run — this truncates/deletes data and inserts fixed test users
 --
 -- PASSWORDS
 --   All seed users use the same password: testpass
@@ -19,10 +20,8 @@
 --   - status = 'approved' users can log in immediately with `testpass`.
 --   - pending / rejected users also have `testpass` set so login tests can reach
 --     `account_not_approved` / `account_rejected` instead of `invalid_credentials`.
---   - The first user per school is auto-approved by the trigger; these seeds bypass
---     that by inserting directly — which requires set_config('app.allow_direct_write','true',true)
---     only when status/cred are set together. Here we INSERT the full row directly which is
---     fine because the guard trigger fires only on UPDATE, not INSERT.
+--   - auto_approve_first() is a legacy no-op; first users are not auto-approved.
+--   - Seed users define approved/pending/rejected status directly for tests.
 --
 -- Shared password hash for all seed users:
 --   pbkdf2:sha256:100000:00112233445566778899aabbccddeeff:06e45b9c137301bebfcda22ef6eb7cf350888f0df7153071d0e7654df0b68a8b
@@ -100,7 +99,7 @@ INSERT INTO public.users (
 ),
 
 -- School: Школа №2  (separate school — isolated community)
--- Frank — first user at school №2, auto-approved behaviour (seeded as approved)
+-- Frank — approved seed user at school №2
 (
   '00000000-0000-0000-0000-000000000006',
   'Орлов Фёдор Николаевич',

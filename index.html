@@ -40,6 +40,32 @@
       <button id="demo-reset-btn" class="btn btn-danger btn-small" type="button">Сбросить</button>
     </div>
 
+    <section id="screen-onboarding" class="screen hidden">
+      <div class="screen-shell auth-shell">
+        <div class="glass-panel onboarding-card">
+          <div class="brand">
+            <div class="brand-mark">F</div>
+            <div class="brand-copy">
+              <strong>Fcom Messenger</strong>
+              <span id="onboarding-kicker">Fcom</span>
+            </div>
+          </div>
+          <div class="onboarding-visual" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <h2 id="onboarding-title">Общайтесь внутри своей школы</h2>
+          <p id="onboarding-text" class="subtitle">Профили, чаты и школьные группы открываются только после модерации аккаунта.</p>
+          <div id="onboarding-dots" class="onboarding-dots" aria-hidden="true"></div>
+          <div class="onboarding-actions">
+            <button id="onboarding-skip-btn" class="btn btn-outline" type="button">Пропустить</button>
+            <button id="onboarding-next-btn" class="btn btn-primary" type="button">Дальше</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="screen-register" class="screen hidden">
       <div class="screen-shell auth-shell auth-shell-wide">
         <div class="glass-panel auth-hero">
@@ -84,7 +110,9 @@
             </div>
             <div class="form-group">
               <label for="reg-school">Школа</label>
-              <input id="reg-school" name="school" type="text" placeholder="Школа №12" required>
+              <select id="reg-school" name="school" required>
+                <option value="Fiztex">Fiztex</option>
+              </select>
             </div>
             <div class="form-group">
               <label for="reg-grade">Класс</label>
@@ -373,6 +401,7 @@
                     </div>
                   </div>
                   <div id="admin-summary" class="admin-summary-grid"></div>
+                  <div id="admin-charts" class="admin-chart-grid"></div>
                 </div>
 
                 <div class="users-grid">
@@ -409,9 +438,61 @@
                   <div id="admin-groups-empty" class="search-empty-state">Групп пока нет.</div>
                   <div id="admin-groups-list" class="card-list"></div>
                 </div>
+
+                <div class="pane-shell">
+                  <div class="pane-head">
+                    <div>
+                      <h3>Жалобы</h3>
+                      <p class="subtitle">Открытые обращения участников, отправленные через профиль или чат.</p>
+                    </div>
+                  </div>
+                  <div id="admin-reports-empty" class="search-empty-state">Открытых жалоб пока нет.</div>
+                  <div id="admin-reports-list" class="card-list"></div>
+                </div>
               </div>
             </section>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen hidden">
+      <div class="screen-shell">
+        <div class="settings-shell glass-panel">
+          <div class="pane-head">
+            <div>
+              <h3>Настройки</h3>
+              <p class="subtitle">Аккаунт, уведомления и список заблокированных участников.</p>
+            </div>
+            <button id="settings-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
+          </div>
+
+          <div class="settings-profile">
+            <div id="settings-avatar"></div>
+            <div>
+              <h3 id="settings-name">Профиль</h3>
+              <p id="settings-meta" class="subtitle">@nickname · school · class</p>
+            </div>
+          </div>
+
+          <label class="settings-row">
+            <span>
+              <strong>Уведомления</strong>
+              <em>Локальная настройка для этого браузера.</em>
+            </span>
+            <input id="settings-notifications-toggle" type="checkbox" role="switch">
+          </label>
+
+          <div class="pane-head pane-head-split">
+            <div>
+              <h3>Заблокированные</h3>
+              <p class="subtitle">Эти участники скрыты из личных списков и не могут писать вам напрямую.</p>
+            </div>
+          </div>
+          <div id="settings-blocked-empty" class="search-empty-state">Список блокировок пуст.</div>
+          <div id="settings-blocked-list" class="card-list"></div>
+
+          <button id="settings-logout-btn" class="btn btn-outline btn-block" type="button">Выйти из аккаунта</button>
         </div>
       </div>
     </section>
@@ -428,6 +509,10 @@
               </button>
               <div id="chat-partner-cred" class="chat-header-cred novice">Novice · Кредо 0</div>
               <div id="chat-header-status" class="chat-header-status"></div>
+            </div>
+            <div class="chat-safety-actions">
+              <button id="chat-partner-report-btn" class="btn btn-outline btn-small hidden" type="button">Пожаловаться</button>
+              <button id="chat-partner-block-btn" class="btn btn-danger btn-small hidden" type="button">Заблокировать</button>
             </div>
           </div>
 
@@ -511,6 +596,36 @@
       </div>
     </section>
   </div>
+
+    <div id="safety-modal" class="safety-modal hidden" role="dialog" aria-modal="true" aria-labelledby="safety-modal-title">
+      <div class="safety-modal-panel">
+        <div class="pane-head">
+          <div>
+            <h3 id="safety-modal-title">Пожаловаться на участника</h3>
+            <p id="safety-modal-copy" class="subtitle">Жалоба попадет администраторам.</p>
+          </div>
+          <button id="safety-modal-cancel" class="btn btn-outline btn-small" type="button">Отмена</button>
+        </div>
+        <p class="safety-target">Участник: <strong id="safety-modal-target">@user</strong></p>
+        <div id="safety-report-form" class="safety-report-form">
+          <div class="form-group">
+            <label for="safety-report-reason">Причина</label>
+            <select id="safety-report-reason">
+              <option value="spam">Спам</option>
+              <option value="harassment">Оскорбления или травля</option>
+              <option value="fake_account">Фейковый аккаунт</option>
+              <option value="inappropriate_content">Неподходящий контент</option>
+              <option value="other">Другое</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="safety-report-details">Комментарий</label>
+            <textarea id="safety-report-details" rows="4" maxlength="1000" placeholder="Опишите ситуацию коротко"></textarea>
+          </div>
+        </div>
+        <button id="safety-modal-primary" class="btn btn-danger" type="button">Отправить жалобу</button>
+      </div>
+    </div>
 
   <script src="avatars.js"></script>
   <script src="presence.js"></script>

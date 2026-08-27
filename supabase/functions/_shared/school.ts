@@ -12,12 +12,13 @@ export function sanitizeSchoolName(value: string): string {
     .trim();
 }
 
-const FIZTEKH = '\u0424\u0438\u0437\u0442\u0435\u0445';
+const FIZTEX = 'Fiztex';
 
 const SCHOOL_ALIASES: Record<string, string> = {
-  'fiztex': FIZTEKH,
-  'phystech': FIZTEKH,
-  '\u0444\u0438\u0437\u0442\u0435\u0445': FIZTEKH,
+  'fiztex': FIZTEX,
+  'fiztekh': FIZTEX,
+  'phystech': FIZTEX,
+  '\u0444\u0438\u0437\u0442\u0435\u0445': FIZTEX,
 };
 
 export function getCanonicalSchoolName(value: string): string {

@@ -27,6 +27,27 @@ const Credo = (() => {
     localStorage.setItem(key, JSON.stringify(data));
   }
 
+  const CANONICAL_SCHOOL = 'Fiztex';
+  const SCHOOL_ALIASES = {
+    fiztex: CANONICAL_SCHOOL,
+    fiztekh: CANONICAL_SCHOOL,
+    phystech: CANONICAL_SCHOOL,
+    'физтех': CANONICAL_SCHOOL,
+  };
+
+  function sanitizeSchoolName(value) {
+    return String(value ?? '')
+      .normalize('NFKC')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function getCanonicalSchoolName(value) {
+    const sanitized = sanitizeSchoolName(value);
+    if (!sanitized) return '';
+    return SCHOOL_ALIASES[sanitized.toLowerCase()] || sanitized;
+  }
+
   // --------------- Доступ к данным ---------------
 
   function getUsers()    { return loadJSON('credo_users', []); }
@@ -46,6 +67,88 @@ const Credo = (() => {
 
   function getGroupChats()      { return loadJSON('credo_group_chats', {}); }
   function saveGroupChats(data) { saveJSON('credo_group_chats', data); }
+
+  function getUserBlocks() {
+    const blocks = loadJSON('credo_user_blocks', []);
+    return Array.isArray(blocks) ? blocks : [];
+  }
+
+  function saveUserBlocks(blocks) {
+    saveJSON('credo_user_blocks', Array.isArray(blocks) ? blocks : []);
+  }
+
+  function getSettings() {
+    const settings = loadJSON('credo_settings', {});
+    return settings && typeof settings === 'object' ? settings : {};
+  }
+
+  function setSetting(key, value) {
+    const settings = getSettings();
+    settings[key] = value;
+    saveJSON('credo_settings', settings);
+    return settings;
+  }
+
+  function getSetting(key, fallback = null) {
+    const settings = getSettings();
+    return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : fallback;
+  }
+
+  function hasSeenOnboarding() {
+    return localStorage.getItem('fcom_onboarding_seen_v1') === 'true';
+  }
+
+  function setOnboardingSeen(seen = true) {
+    if (seen) localStorage.setItem('fcom_onboarding_seen_v1', 'true');
+    else localStorage.removeItem('fcom_onboarding_seen_v1');
+  }
+
+  function getBlockedUserIds(userId) {
+    const ids = new Set();
+    if (!userId) return ids;
+    getUserBlocks().forEach((block) => {
+      if (block.blockerId === userId && block.blockedId) ids.add(block.blockedId);
+      if (block.blockedId === userId && block.blockerId) ids.add(block.blockerId);
+    });
+    return ids;
+  }
+
+  function isUserBlockedFor(firstUserId, secondUserId) {
+    if (!firstUserId || !secondUserId) return false;
+    return getBlockedUserIds(firstUserId).has(secondUserId);
+  }
+
+  function blockUserLocal(blockerId, blockedId) {
+    if (!blockerId || !blockedId || blockerId === blockedId) {
+      return { ok: false, error: 'invalid_block_target' };
+    }
+
+    const blocks = getUserBlocks();
+    const exists = blocks.some((block) =>
+      block.blockerId === blockerId && block.blockedId === blockedId,
+    );
+
+    if (!exists) {
+      blocks.push({
+        blockerId,
+        blockedId,
+        createdAt: new Date().toISOString(),
+        user: getUserById(blockedId),
+      });
+      saveUserBlocks(blocks);
+    }
+
+    return { ok: true, blocks: getUserBlocks() };
+  }
+
+  function unblockUserLocal(blockerId, blockedId) {
+    if (!blockerId || !blockedId) return { ok: false, error: 'invalid_block_target' };
+    const next = getUserBlocks().filter((block) =>
+      !(block.blockerId === blockerId && block.blockedId === blockedId),
+    );
+    saveUserBlocks(next);
+    return { ok: true, blocks: next };
+  }
 
   function getDeviceAccountIds() {
     const ids = loadJSON('credo_device_accounts', null);
@@ -146,6 +249,7 @@ const Credo = (() => {
     if (isDeviceBlocked()) return { ok: false, error: 'device_blocked' };
 
     const users = getUsers();
+    const canonicalSchool = getCanonicalSchoolName(school);
 
     // Проверка: если на этом устройстве есть отклонённый пользователь — блокируем
     const hasRejected = users.some(u => u.status === 'rejected');
@@ -165,7 +269,7 @@ const Credo = (() => {
     const user = {
       id: generateId(),
       fullName,
-      school,
+      school: canonicalSchool,
       grade,
       nickname,
       role: 'member',
@@ -182,6 +286,55 @@ const Credo = (() => {
     markDeviceAccount(user.id);
 
     return { ok: true, user };
+  }
+
+  function migrateSchoolsToFiztex() {
+    const users = getUsers();
+    let usersChanged = false;
+    users.forEach((user) => {
+      if (user.school !== CANONICAL_SCHOOL) {
+        user.school = CANONICAL_SCHOOL;
+        usersChanged = true;
+      }
+    });
+    if (usersChanged) saveUsers(users);
+
+    const groups = getGroups();
+    let groupsChanged = false;
+    groups.forEach((group) => {
+      if (group.school !== CANONICAL_SCHOOL) {
+        group.school = CANONICAL_SCHOOL;
+        groupsChanged = true;
+      }
+      if (group.type === 'school_public' && group.name !== CANONICAL_SCHOOL) {
+        group.name = CANONICAL_SCHOOL;
+        groupsChanged = true;
+      }
+      if (Array.isArray(group.members)) {
+        group.members.forEach((member) => {
+          if (member.school !== CANONICAL_SCHOOL) {
+            member.school = CANONICAL_SCHOOL;
+            groupsChanged = true;
+          }
+        });
+      }
+    });
+    if (groupsChanged) saveGroups(groups);
+
+    const invites = getGroupInvites();
+    let invitesChanged = false;
+    invites.forEach((invite) => {
+      if (!invite.group) return;
+      if (invite.group.school !== CANONICAL_SCHOOL) {
+        invite.group.school = CANONICAL_SCHOOL;
+        invitesChanged = true;
+      }
+      if (invite.group.type === 'school_public' && invite.group.name !== CANONICAL_SCHOOL) {
+        invite.group.name = CANONICAL_SCHOOL;
+        invitesChanged = true;
+      }
+    });
+    if (invitesChanged) saveGroupInvites(invites);
   }
 
   // --------------- Одобрение / Отклонение ---------------
@@ -209,6 +362,7 @@ const Credo = (() => {
   }
 
   function sendMessage(fromId, toId, text, extra) {
+    if (isUserBlockedFor(fromId, toId)) return { ok: false, error: 'user_blocked' };
     extra = extra || {};
     const chats = getChats();
     const key = chatKey(fromId, toId);
@@ -307,6 +461,7 @@ const Credo = (() => {
     (memberIds || []).forEach((memberId) => {
       const invitedUser = getUserById(memberId);
       if (!invitedUser || invitedUser.id === creatorId) return;
+      if (isUserBlockedFor(creatorId, invitedUser.id)) return;
       invites.push({
         id: 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         createdAt: new Date().toISOString(),
@@ -432,6 +587,7 @@ const Credo = (() => {
 
   function canRate(fromId, toId) {
     if (fromId === toId) return { ok: false, reason: 'self' };
+    if (isUserBlockedFor(fromId, toId)) return { ok: false, reason: 'user_blocked' };
 
     if (!hadConversation(fromId, toId)) {
       return { ok: false, reason: 'no_chat' };
@@ -535,7 +691,9 @@ const Credo = (() => {
    */
   function getChatPartners(userId) {
     const user = getUserById(userId);
-    return user ? user.chats : [];
+    if (!user) return [];
+    const blockedIds = getBlockedUserIds(userId);
+    return user.chats.filter((id) => !blockedIds.has(id));
   }
 
   // --------------- Полный сброс (для демо) ---------------
@@ -547,12 +705,18 @@ const Credo = (() => {
     localStorage.removeItem('credo_groups');
     localStorage.removeItem('credo_group_invites');
     localStorage.removeItem('credo_group_chats');
+    localStorage.removeItem('credo_user_blocks');
+    localStorage.removeItem('credo_user_reports');
+    localStorage.removeItem('credo_settings');
+    localStorage.removeItem('fcom_onboarding_seen_v1');
     localStorage.removeItem('credo_device_accounts');
     localStorage.removeItem('credo_blocked');
     localStorage.removeItem('credo_current_user');
   }
 
   // --------------- Публичный API ---------------
+
+  migrateSchoolsToFiztex();
 
   return {
     // Данные
@@ -580,6 +744,17 @@ const Credo = (() => {
     getGroups,
     getGroupById,
     getGroupInvites,
+    getUserBlocks,
+    saveUserBlocks,
+    getSettings,
+    setSetting,
+    getSetting,
+    hasSeenOnboarding,
+    setOnboardingSeen,
+    getBlockedUserIds,
+    isUserBlockedFor,
+    blockUserLocal,
+    unblockUserLocal,
     createGroup,
     respondGroupInvite,
     hadConversation,

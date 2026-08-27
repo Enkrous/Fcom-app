@@ -11,7 +11,7 @@
  *       nickname  → nickname_taken
  *       phone     → phone_taken        (only when phone provided)
  *       fullName  → fullName_taken
- *  5. INSERT user (trigger auto_approve_first handles first-user logic)
+ *  5. INSERT pending member (auto_approve_first is a legacy no-op)
  *  6. If phone provided, generate OTP → save to otp_codes → send SMS
  *     In dev mode (SMS_API_URL not set) the code is also returned as _devOtp
  *  7. Issue short-lived JWT so /set-password can be called immediately
@@ -23,7 +23,7 @@ import { getServiceClient }      from '../_shared/db.ts';
 import { signJWT }               from '../_shared/jwt.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
 import { ensureSchoolPublicGroup } from '../_shared/groups.ts';
-import { getCanonicalSchoolName, isSameSchool, sanitizeSchoolName } from '../_shared/school.ts';
+import { getCanonicalSchoolName, sanitizeSchoolName } from '../_shared/school.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
@@ -102,22 +102,9 @@ Deno.serve(async (req: Request) => {
 
   if (existingName) return err('fullName_taken');
 
-  const { data: knownSchools, error: schoolLookupErr } = await supabase
-    .from('users')
-    .select('school')
-    .not('school', 'is', null);
+  const canonicalSchool = getCanonicalSchoolName(normalizedSchool);
 
-  if (schoolLookupErr) {
-    console.error('register school lookup error:', schoolLookupErr);
-    return err('registration_failed', 500);
-  }
-
-  const canonicalSchool =
-    (knownSchools ?? []).find((row: { school: string | null }) =>
-      row.school && isSameSchool(row.school, normalizedSchool),
-    )?.school ?? getCanonicalSchoolName(normalizedSchool);
-
-  // ── 5. INSERT user — trigger auto_approve_first fires automatically ────────
+  // ── 5. INSERT user as pending; admin approval is required ──────────────────
   const { data: user, error: insertErr } = await supabase
     .from('users')
     .insert({
@@ -128,7 +115,7 @@ Deno.serve(async (req: Request) => {
       phone:         phone.trim() || null,
       phoneVerified: false,
       role:          'member',
-      status:        'pending',   // trigger overrides to 'approved' for first user in school
+      status:        'pending',
       cred:          0,
     })
     .select('id, "fullName", school, grade, nickname, phone, "phoneVerified", role, status, cred, "createdAt"')

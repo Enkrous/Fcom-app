@@ -18,6 +18,7 @@ const App = (() => {
   const landingFrame = $('#landing-frame');
 
   const screens = {
+    onboarding:   $('#screen-onboarding'),
     setPassword:  $('#screen-set-password'),
     login:        $('#screen-login'),
     blocked:      $('#screen-blocked'),
@@ -26,6 +27,7 @@ const App = (() => {
     main:         $('#screen-main'),
     rate:         $('#screen-rate'),
     chat:         $('#screen-chat'),
+    settings:     $('#screen-settings'),
     verifyPhone:  $('#screen-verify-phone'),
     userProfile:  $('#screen-user-profile'),
   };
@@ -39,6 +41,36 @@ const App = (() => {
   let pendingRatings  = {};  // { toId: score }
   let _pendingPhone   = '';  // phone waiting for OTP confirmation
   let _pendingChatImage = null;
+  let _onboardingIndex = 0;
+  let _onboardingNextScreen = 'register';
+  let _safetyTargetUserId = null;
+  let _safetyMode = 'report';
+
+  const ONBOARDING_STEPS = [
+    {
+      kicker: 'Fcom',
+      title: 'Общайтесь внутри своей школы',
+      text: 'Профили, чаты и школьные группы открываются только после модерации аккаунта.',
+    },
+    {
+      kicker: 'Credo',
+      title: 'Репутация растет от реальных взаимодействий',
+      text: 'Оценки доступны после диалога, а лимиты защищают рейтинг от накрутки.',
+    },
+    {
+      kicker: 'Безопасность',
+      title: 'Жалобы и блокировки под рукой',
+      text: 'Можно пожаловаться на участника, заблокировать личные сообщения и снять блокировку в настройках.',
+    },
+  ];
+
+  const REPORT_REASON_LABELS = {
+    spam: 'Спам',
+    harassment: 'Оскорбления или травля',
+    fake_account: 'Фейковый аккаунт',
+    inappropriate_content: 'Неподходящий контент',
+    other: 'Другое',
+  };
 
   // Presence: таймеры
   let _typingDebounceTimer  = null;  // debounce «печатает»
@@ -94,7 +126,7 @@ const App = (() => {
         class="demo-select-option${option.isActive ? ' is-active' : ''}"
         type="button"
         role="option"
-        data-demo-user-value="${option.id}"
+        data-demo-user-value="${escapeAttr(option.id)}"
         aria-selected="${option.isActive ? 'true' : 'false'}"
       >
         <span class="demo-option-title">${escapeHtml(option.title)}</span>
@@ -135,6 +167,39 @@ const App = (() => {
 
   function _isAdmin(user) {
     return user?.role === 'admin';
+  }
+
+  function _isBlockedPeer(userId) {
+    const currentUserId = Credo.getCurrentUserId();
+    return typeof Credo.isUserBlockedFor === 'function'
+      && Credo.isUserBlockedFor(currentUserId, userId);
+  }
+
+  function _getVisibleApprovedUsers(currentUser) {
+    const blockedIds = typeof Credo.getBlockedUserIds === 'function'
+      ? Credo.getBlockedUserIds(currentUser.id)
+      : new Set();
+    return Credo.getApprovedUsers().filter((user) =>
+      user.id !== currentUser.id && !blockedIds.has(user.id),
+    );
+  }
+
+  function _safetyErrorMessage(error) {
+    const messages = {
+      user_blocked: 'Личные действия с этим участником недоступны из-за блокировки.',
+      cannot_report_self: 'Нельзя пожаловаться на свой профиль.',
+      cannot_block_self: 'Нельзя заблокировать свой профиль.',
+      invalid_reason: 'Выберите причину жалобы.',
+      details_too_long: 'Комментарий слишком длинный.',
+      target_not_found: 'Участник не найден.',
+      target_not_approved: 'Участник еще не одобрен.',
+      cross_school_forbidden: 'Действие доступно только внутри вашей школы.',
+      rate_limit_exceeded: 'Слишком много попыток. Попробуйте позже.',
+      admin_only: 'Доступно только администратору.',
+      forbidden: 'Недостаточно прав для этого действия.',
+      network_error: 'Не удалось связаться с сервером.',
+    };
+    return messages[error] || ('Ошибка: ' + (error || 'unknown_error'));
   }
 
   function _enforceSingleAccountForRegularUser(user) {
@@ -203,49 +268,68 @@ const App = (() => {
     if (btn) btn.classList.add('active');
   }
 
-  function _buildDashboardNickname() {
-    const users = Credo.getUsers();
-    let suffix = 0;
-    let nickname = 'dashboard';
-    while (users.some((user) => user.nickname.toLowerCase() === nickname.toLowerCase())) {
-      suffix += 1;
-      nickname = `dashboard${suffix}`;
-    }
-    return nickname;
+  function _shouldShowOnboarding() {
+    return typeof Credo.hasSeenOnboarding === 'function' && !Credo.hasSeenOnboarding();
   }
 
-  function ensureDashboardUser() {
-    const currentUserId = Credo.getCurrentUserId();
-    const currentUser = currentUserId ? Credo.getUserById(currentUserId) : null;
+  function openOnboarding(nextScreen = 'register') {
+    _onboardingNextScreen = nextScreen;
+    _onboardingIndex = 0;
+    renderOnboardingStep();
+    showScreen('onboarding');
+  }
 
-    if (currentUser && currentUser.status === 'approved') {
-      if (!currentUser.passwordHash) {
-        Credo.updateUser(currentUser.id, { passwordHash: 'dashboard-access' });
-      }
-      return currentUser.id;
+  function renderOnboardingStep() {
+    const step = ONBOARDING_STEPS[_onboardingIndex] || ONBOARDING_STEPS[0];
+    const kicker = $('#onboarding-kicker');
+    const title = $('#onboarding-title');
+    const text = $('#onboarding-text');
+    const dots = $('#onboarding-dots');
+    const next = $('#onboarding-next-btn');
+
+    if (kicker) kicker.textContent = step.kicker;
+    if (title) title.textContent = step.title;
+    if (text) text.textContent = step.text;
+    if (next) next.textContent = _onboardingIndex === ONBOARDING_STEPS.length - 1 ? 'Начать' : 'Дальше';
+    if (dots) {
+      dots.innerHTML = ONBOARDING_STEPS.map((_, index) =>
+        `<span class="onboarding-dot${index === _onboardingIndex ? ' is-active' : ''}" aria-hidden="true"></span>`,
+      ).join('');
     }
+  }
 
-    const approvedUser = Credo.getDeviceAccounts().find((user) => user.status === 'approved');
-    if (approvedUser) {
-      if (!approvedUser.passwordHash) {
-        Credo.updateUser(approvedUser.id, { passwordHash: 'dashboard-access' });
-      }
-      Credo.setCurrentUserId(approvedUser.id);
-      return approvedUser.id;
+  function completeOnboarding() {
+    if (typeof Credo.setOnboardingSeen === 'function') {
+      Credo.setOnboardingSeen(true);
     }
+    showScreen(_onboardingNextScreen);
+  }
 
-    const result = Credo.registerUser(
-      'FCOM Dashboard',
-      'Fcom Platform',
-      'System',
-      _buildDashboardNickname()
-    );
+  function handleOnboardingNext() {
+    if (_onboardingIndex < ONBOARDING_STEPS.length - 1) {
+      _onboardingIndex += 1;
+      renderOnboardingStep();
+      return;
+    }
+    completeOnboarding();
+  }
 
-    if (!result.ok || !result.user) return null;
+  function renderPendingScreen(user) {
+    $('#pending-nickname').textContent = `@${user.nickname}`;
+    const card = screens.pending?.querySelector('.status-card');
+    if (!card || card.querySelector('.status-steps')) return;
 
-    Credo.updateUser(result.user.id, { passwordHash: 'dashboard-access' });
-    Credo.setCurrentUserId(result.user.id);
-    return result.user.id;
+    const steps = document.createElement('div');
+    steps.className = 'status-steps';
+    steps.innerHTML = `
+      <div class="status-step is-done"><strong>Профиль создан</strong><span>Заявка сохранена и ожидает проверки.</span></div>
+      <div class="status-step is-active"><strong>Модерация</strong><span>Администратор проверит школу и данные профиля.</span></div>
+      <div class="status-step"><strong>Пароль и вход</strong><span>После одобрения откроется создание пароля.</span></div>
+    `;
+
+    const homeButton = card.querySelector('[data-go-home]');
+    if (homeButton) card.insertBefore(steps, homeButton);
+    else card.appendChild(steps);
   }
 
   // --------------- Маршрутизация ---------------
@@ -261,6 +345,10 @@ const App = (() => {
     // Нет текущего пользователя — показать логин (или регистрацию если нет пользователей)
     if (!userId) {
       const users = _getLocalAccounts();
+      if (_appVisible && _shouldShowOnboarding()) {
+        openOnboarding(_isBackendMode() ? 'login' : (users.length === 0 ? 'register' : 'login'));
+        return;
+      }
       if (_isBackendMode()) {
         showScreen('login');
       } else if (users.length === 0) {
@@ -294,7 +382,7 @@ const App = (() => {
     }
 
     if (user.status === 'pending') {
-      $('#pending-nickname').textContent = `@${user.nickname}`;
+      renderPendingScreen(user);
       showScreen('pending');
       return;
     }
@@ -327,6 +415,11 @@ const App = (() => {
         return;
       }
 
+      if (_shouldShowOnboarding()) {
+        openOnboarding('register');
+        return;
+      }
+
       showScreen('register');
       return;
     }
@@ -343,6 +436,11 @@ const App = (() => {
         return;
       }
 
+      if (_shouldShowOnboarding()) {
+        openOnboarding('login');
+        return;
+      }
+
       if (!_isBackendMode() && _getLocalAccounts().length === 0) {
         showScreen('register');
         return;
@@ -356,30 +454,7 @@ const App = (() => {
   }
 
   function openDashboardExperience() {
-    if (Credo.isDeviceBlocked()) {
-      setAppVisible(true);
-      showScreen('blocked');
-      return;
-    }
-
-    const userId = ensureDashboardUser();
-    if (!userId) {
-      openExperience('register');
-      return;
-    }
-
-    setAppVisible(true);
-    refreshDemoSelect();
-
-    const user = Credo.getUserById(userId);
-    if (!user) {
-      route();
-      return;
-    }
-
-    showScreen('main');
-    renderMainScreen(user);
-    showTab('chats');
+    openExperience('register');
   }
 
   function closeExperience() {
@@ -419,7 +494,7 @@ const App = (() => {
         registrationBtn.dataset.dashboardBound = 'true';
         registrationBtn.addEventListener('click', (event) => {
           event.preventDefault();
-          openDashboardExperience();
+          openExperience('register');
         });
       }
     };
@@ -518,7 +593,7 @@ const App = (() => {
   function renderChatList(currentUser) {
     const container = $('#chat-list');
     const query = _chatSearchQuery.trim().toLowerCase();
-    let approved = Credo.getApprovedUsers().filter(u => u.id !== currentUser.id);
+    let approved = _getVisibleApprovedUsers(currentUser);
 
     if (query) {
       approved = approved.filter(u =>
@@ -559,22 +634,22 @@ const App = (() => {
         ? Notif.getUnreadCount(currentUser.id, user.id) : 0;
 
       return `
-        <div class="card chat-card" data-user-id="${user.id}">
-          <button class="profile-link-btn" type="button" data-open-user-profile="${user.id}">
+        <div class="card chat-card" data-user-id="${escapeAttr(user.id)}">
+          <button class="profile-link-btn" type="button" data-open-user-profile="${escapeAttr(user.id)}">
             ${Avatar.html({ seed: user.nickname, imageUrl: user.avatarUrl || '' })}
           </button>
           <div class="card-body">
             <div class="card-name">
-              <button class="profile-link-btn profile-link-card" type="button" data-open-user-profile="${user.id}">
-                <span class="profile-link-text">${escapeHtml(user.nickname)}</span>
+              <button class="profile-link-btn profile-link-card" type="button" data-open-user-profile="${escapeAttr(user.id)}">
+                <span class="profile-link-text">${escapeHtml(user.nickname || '')}</span>
               </button>
-              <span class="level-badge ${level.css}">${level.name}</span>
+              <span class="level-badge ${escapeAttr(level.css)}">${escapeHtml(level.name)}</span>
             </div>
             <div class="card-sub">
-              <span class="card-user-status" data-status-for="${user.id}"></span><span class="card-last-msg">${truncate(lastMsg, msgs.length > 0 ? 36 : 44)}</span>
+              <span class="card-user-status" data-status-for="${escapeAttr(user.id)}"></span><span class="card-last-msg">${escapeHtml(truncate(lastMsg, msgs.length > 0 ? 36 : 44))}</span>
             </div>
           </div>
-          ${unread > 0 ? `<span class="chat-unread-count">${unread > 99 ? '99+' : unread}</span>` : ''}
+          ${unread > 0 ? `<span class="chat-unread-count">${escapeHtml(String(unread > 99 ? '99+' : unread))}</span>` : ''}
         </div>`;
     }).join('');
 
@@ -640,11 +715,11 @@ const App = (() => {
         : (group.type === 'school_public' ? 'Публичная группа школы' : 'Закрытая группа по приглашениям');
 
       return `
-        <div class="card chat-card" data-group-id="${group.id}">
+        <div class="card chat-card" data-group-id="${escapeAttr(group.id)}">
           ${Avatar.html({ seed: group.name, imageUrl: group.avatarUrl || '', chars: 2 })}
           <div class="card-body">
-            <div class="card-name">${escapeHtml(group.name)}
-              <span class="level-badge ${group.type === 'school_public' ? 'known' : 'trusted'}">${group.type === 'school_public' ? 'School' : 'Group'}</span>
+            <div class="card-name">${escapeHtml(group.name || '')}
+              <span class="level-badge ${escapeAttr(group.type === 'school_public' ? 'known' : 'trusted')}">${escapeHtml(group.type === 'school_public' ? 'School' : 'Group')}</span>
             </div>
             <div class="card-sub">${escapeHtml(lastMsg)}</div>
           </div>
@@ -722,12 +797,12 @@ const App = (() => {
         <div class="card">
           ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
           <div class="card-body">
-            <div class="card-name">${u.fullName}</div>
-            <div class="card-sub">@${u.nickname} · ${u.school} · ${u.grade}</div>
+            <div class="card-name">${escapeHtml(u.fullName || '')}</div>
+            <div class="card-sub">@${escapeHtml(u.nickname || '')} · ${escapeHtml(u.school || '')} · ${escapeHtml(u.grade || '')}</div>
           </div>
           <div class="card-actions">
-            <button class="btn btn-success btn-small" data-approve="${u.id}">Одобрить</button>
-            <button class="btn btn-danger btn-small" data-reject="${u.id}">Отклонить</button>
+            <button class="btn btn-success btn-small" data-approve="${escapeAttr(u.id)}">Одобрить</button>
+            <button class="btn btn-danger btn-small" data-reject="${escapeAttr(u.id)}">Отклонить</button>
           </div>
         </div>`).join('');
 
@@ -747,7 +822,7 @@ const App = (() => {
 
     // Участники
     const memberQuery = _memberSearchQuery.trim().toLowerCase();
-    let members = Credo.getApprovedUsers().filter(u => u.id !== currentUser.id);
+    let members = _getVisibleApprovedUsers(currentUser);
 
     if (memberQuery) {
       members = members.filter(u =>
@@ -774,21 +849,21 @@ const App = (() => {
         const level = Credo.getCredLevel(u.cred);
         return `
           <div class="card">
-            <button class="profile-link-btn" type="button" data-open-member-profile="${u.id}">
+            <button class="profile-link-btn" type="button" data-open-member-profile="${escapeAttr(u.id)}">
               ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
             </button>
             <div class="card-body">
               <div class="card-name">
-                <button class="profile-link-btn profile-link-card" type="button" data-open-member-profile="${u.id}">
-                  <span class="profile-link-text">${escapeHtml(u.nickname)}</span>
+                <button class="profile-link-btn profile-link-card" type="button" data-open-member-profile="${escapeAttr(u.id)}">
+                  <span class="profile-link-text">${escapeHtml(u.nickname || '')}</span>
                 </button>
-                <span class="level-badge ${level.css}">${level.name}</span>
+                <span class="level-badge ${escapeAttr(level.css)}">${escapeHtml(level.name)}</span>
               </div>
-              <div class="card-sub">${u.fullName} · Кредо: ${u.cred}</div>
+              <div class="card-sub">${escapeHtml(u.fullName || '')} · Кредо: ${escapeHtml(String(u.cred ?? 0))}</div>
             </div>
             <div class="card-actions">
-              <button class="btn btn-outline btn-small" type="button" data-open-member-profile="${u.id}">Профиль</button>
-              <button class="btn btn-small" type="button" data-open-chat="${u.id}">Chat</button>
+              <button class="btn btn-outline btn-small" type="button" data-open-member-profile="${escapeAttr(u.id)}">Профиль</button>
+              <button class="btn btn-small" type="button" data-open-chat="${escapeAttr(u.id)}">Chat</button>
             </div>
           </div>`;
       }).join('');
@@ -806,14 +881,19 @@ const App = (() => {
     const picker = $('#group-members-picker');
     const invitesList = $('#group-invites-list');
     const invitesEmpty = $('#group-invites-empty');
-    const invites = Credo.getGroupInvites();
+    const blockedIds = typeof Credo.getBlockedUserIds === 'function'
+      ? Credo.getBlockedUserIds(currentUser.id)
+      : new Set();
+    const invites = Credo.getGroupInvites().filter((invite) =>
+      !blockedIds.has(invite.invitedBy?.id),
+    );
 
     picker.innerHTML = members.length === 0
       ? '<p class="hint">Сначала нужен хотя бы один одобренный участник для приглашения.</p>'
       : members.map((user) => `
           <label class="group-member-option">
-            <input type="checkbox" value="${user.id}">
-            <span>${escapeHtml(user.nickname)} · ${escapeHtml(user.fullName || '')}</span>
+            <input type="checkbox" value="${escapeAttr(user.id)}">
+            <span>${escapeHtml(user.nickname || '')} · ${escapeHtml(user.fullName || '')}</span>
           </label>
         `).join('');
 
@@ -830,8 +910,8 @@ const App = (() => {
             <div class="card-sub">Пригласил: @${escapeHtml(invite.invitedBy?.nickname || 'unknown')}</div>
           </div>
           <div class="card-actions">
-            <button class="btn btn-success btn-small" data-accept-invite="${invite.id}">Вступить</button>
-            <button class="btn btn-outline btn-small" data-decline-invite="${invite.id}">Отклонить</button>
+            <button class="btn btn-success btn-small" data-accept-invite="${escapeAttr(invite.id)}">Вступить</button>
+            <button class="btn btn-outline btn-small" data-decline-invite="${escapeAttr(invite.id)}">Отклонить</button>
           </div>
         </div>
       `).join('');
@@ -882,6 +962,93 @@ const App = (() => {
       cardSelector: '#tab-profile .profile-card',
       historyListId: 'rate-history',
       historyEmptyId: 'rate-history-empty',
+    });
+
+    const card = $('#tab-profile .profile-card');
+    if (!card) return;
+
+    let actions = $('#profile-actions');
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.id = 'profile-actions';
+      actions.className = 'user-profile-actions';
+      card.appendChild(actions);
+    }
+
+    actions.innerHTML = '<button id="profile-settings-btn" class="btn btn-primary btn-small" type="button">Настройки</button>';
+    const button = $('#profile-settings-btn');
+    if (button) button.addEventListener('click', openSettingsScreen);
+  }
+
+  function openSettingsScreen() {
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (!currentUser) {
+      route();
+      return;
+    }
+    renderSettingsScreen(currentUser);
+    showScreen('settings');
+  }
+
+  function renderSettingsScreen(user) {
+    const avatar = $('#settings-avatar');
+    const name = $('#settings-name');
+    const meta = $('#settings-meta');
+    const toggle = $('#settings-notifications-toggle');
+    const blockedList = $('#settings-blocked-list');
+    const blockedEmpty = $('#settings-blocked-empty');
+
+    if (avatar) {
+      avatar.innerHTML = Avatar.html({
+        seed: user.nickname,
+        imageUrl: user.avatarUrl || '',
+      });
+    }
+    if (name) name.textContent = user.fullName || '@' + user.nickname;
+    if (meta) meta.textContent = `@${user.nickname} · ${user.school} · ${user.grade}`;
+    if (toggle) toggle.checked = Credo.getSetting('notificationsEnabled', true) !== false;
+
+    if (!blockedList || !blockedEmpty) return;
+
+    const blocks = (Credo.getUserBlocks ? Credo.getUserBlocks() : [])
+      .filter((block) => block.blockerId === user.id);
+
+    if (blocks.length === 0) {
+      blockedList.innerHTML = '';
+      blockedEmpty.classList.remove('hidden');
+      return;
+    }
+
+    blockedEmpty.classList.add('hidden');
+    blockedList.innerHTML = blocks.map((block) => {
+      const blockedUser = block.user || Credo.getUserById(block.blockedId) || {};
+      const nickname = blockedUser.nickname || 'unknown';
+      const fullName = blockedUser.fullName || '';
+      return `
+        <div class="card">
+          ${Avatar.html({ seed: nickname, imageUrl: blockedUser.avatarUrl || '' })}
+          <div class="card-body">
+            <div class="card-name">@${escapeHtml(nickname)}</div>
+            <div class="card-sub">${escapeHtml(fullName || 'Заблокированный участник')}</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-outline btn-small" type="button" data-settings-unblock="${escapeAttr(block.blockedId)}">Разблокировать</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    blockedList.querySelectorAll('[data-settings-unblock]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const result = typeof API !== 'undefined' && typeof API.unblockUser === 'function'
+          ? await API.unblockUser(button.dataset.settingsUnblock)
+          : Credo.unblockUserLocal(user.id, button.dataset.settingsUnblock);
+        if (!result?.ok) {
+          alert(_safetyErrorMessage(result?.error));
+          return;
+        }
+        renderSettingsScreen(Credo.getUserById(user.id) || user);
+      });
     });
   }
 
@@ -953,10 +1120,10 @@ const App = (() => {
       return `
         <div class="history-card">
           <div>
-            <div style="font-size:13px"><strong>@${fromName}</strong></div>
-            <div class="history-meta">${stars} · ${dateStr}</div>
+            <div style="font-size:13px"><strong>@${escapeHtml(fromName)}</strong></div>
+            <div class="history-meta">${escapeHtml(stars)} · ${escapeHtml(dateStr)}</div>
           </div>
-          <div class="history-score ${cls}">${sign}${r.effectiveDelta}</div>
+          <div class="history-score ${escapeAttr(cls)}">${escapeHtml(sign + String(r.effectiveDelta))}</div>
         </div>`;
     }).join('');
   }
@@ -967,20 +1134,33 @@ const App = (() => {
 
     const requestId = ++_adminStatsRequest;
     const summary = $('#admin-summary');
+    const charts = $('#admin-charts');
     const schoolsList = $('#admin-schools-list');
     const schoolsEmpty = $('#admin-schools-empty');
     const usersList = $('#admin-users-list');
     const usersEmpty = $('#admin-users-empty');
     const groupsList = $('#admin-groups-list');
     const groupsEmpty = $('#admin-groups-empty');
+    const reportsList = $('#admin-reports-list');
+    const reportsEmpty = $('#admin-reports-empty');
 
     if (summary) {
       summary.innerHTML = `
-        <div class="admin-stat-card"><strong>...</strong><span>Загрузка</span></div>
-        <div class="admin-stat-card"><strong>...</strong><span>Пользователи</span></div>
-        <div class="admin-stat-card"><strong>...</strong><span>Группы</span></div>
-        <div class="admin-stat-card"><strong>...</strong><span>Сообщения</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0434\u0430\u043d\u043d\u044b\u0445</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>\u0417\u0430\u044f\u0432\u043a\u0438</span></div>
+        <div class="admin-stat-card"><strong>...</strong><span>\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f</span></div>
       `;
+    }
+    if (charts) {
+      charts.innerHTML = `
+        <div class="admin-chart-card"><div class="search-empty-state">\u0421\u0442\u0440\u043e\u0438\u043c \u0433\u0440\u0430\u0444\u0438\u043a\u0438...</div></div>
+        <div class="admin-chart-card"><div class="search-empty-state">\u041f\u043e\u0434\u0442\u044f\u0433\u0438\u0432\u0430\u0435\u043c \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0441\u0442\u044c...</div></div>
+      `;
+    }
+    if (reportsList) {
+      reportsList.innerHTML = '<div class="search-empty-state">Загружаем жалобы...</div>';
+      if (reportsEmpty) reportsEmpty.classList.add('hidden');
     }
 
     const result = typeof API !== 'undefined' && typeof API.adminStats === 'function'
@@ -991,36 +1171,63 @@ const App = (() => {
 
     if (!result?.ok) {
       if (summary) {
-        summary.innerHTML = '<div class="search-empty-state">Не удалось загрузить админ-статистику.</div>';
+        summary.innerHTML = '<div class="search-empty-state">\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0430\u0434\u043c\u0438\u043d-\u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0443.</div>';
       }
+      if (charts) charts.innerHTML = '';
       if (schoolsList) schoolsList.innerHTML = '';
       if (usersList) usersList.innerHTML = '';
       if (groupsList) groupsList.innerHTML = '';
+      if (reportsList) reportsList.innerHTML = '';
       if (schoolsEmpty) schoolsEmpty.classList.remove('hidden');
       if (usersEmpty) usersEmpty.classList.remove('hidden');
       if (groupsEmpty) groupsEmpty.classList.remove('hidden');
+      if (reportsEmpty) reportsEmpty.classList.remove('hidden');
       return;
     }
 
     const stats = result.summary || {};
     if (summary) {
       summary.innerHTML = [
-        ['Всего пользователей', stats.totalUsers ?? 0],
-        ['Одобрено', stats.approvedUsers ?? 0],
-        ['Ожидают', stats.pendingUsers ?? 0],
-        ['Отклонено', stats.rejectedUsers ?? 0],
-        ['Админы', stats.adminUsers ?? 0],
-        ['Группы', stats.totalGroups ?? 0],
-        ['Сообщения', stats.totalMessages ?? 0],
-        ['За 24 часа', stats.messages24h ?? 0],
-        ['Фото за 24 часа', stats.images24h ?? 0],
-        ['Инвайты', stats.pendingInvites ?? 0],
+        ['\u0412\u0441\u0435\u0433\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u0439', stats.totalUsers ?? 0],
+        ['\u041d\u043e\u0432\u044b\u0435 \u0437\u0430 24 \u0447\u0430\u0441\u0430', stats.newUsers24h ?? 0],
+        ['\u041d\u043e\u0432\u044b\u0435 \u0437\u0430 7 \u0434\u043d\u0435\u0439', stats.newUsers7d ?? 0],
+        ['\u0417\u0430\u044f\u0432\u043a\u0438 \u043d\u0430 \u043e\u0434\u043e\u0431\u0440\u0435\u043d\u0438\u0435', stats.pendingUsers ?? 0],
+        ['\u041d\u043e\u0432\u044b\u0445 \u0437\u0430\u044f\u0432\u043e\u043a \u0437\u0430 24 \u0447\u0430\u0441\u0430', stats.newApplications24h ?? 0],
+        ['\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e', stats.totalMessages ?? 0],
+        ['\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0437\u0430 24 \u0447\u0430\u0441\u0430', stats.messages24h ?? 0],
+        ['\u0424\u043e\u0442\u043e \u0437\u0430 24 \u0447\u0430\u0441\u0430', stats.images24h ?? 0],
+        ['\u0412\u0441\u0435\u0433\u043e \u0433\u0440\u0443\u043f\u043f', stats.totalGroups ?? 0],
+        ['\u0418\u043d\u0432\u0430\u0439\u0442\u044b', stats.pendingInvites ?? 0],
+        ['Открытые жалобы', stats.openReports ?? 0],
+        ['Жалобы за 24 часа', stats.reports24h ?? 0],
+        ['Блокировки', stats.totalBlocks ?? 0],
       ].map(([label, value]) => `
         <div class="admin-stat-card">
           <strong>${escapeHtml(String(value))}</strong>
           <span>${escapeHtml(String(label))}</span>
         </div>
       `).join('');
+    }
+
+    if (charts) {
+      const chartData = result.charts || {};
+      charts.innerHTML = [
+        _renderAdminBarChart({
+          title: '\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438 \u0437\u0430 7 \u0434\u043d\u0435\u0439',
+          subtitle: '\u0421\u043a\u043e\u043b\u044c\u043a\u043e \u043d\u043e\u0432\u044b\u0445 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u043e\u0432 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u043b\u043e\u0441\u044c \u043a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c.',
+          items: chartData.registrationsByDay || [],
+        }),
+        _renderAdminBarChart({
+          title: '\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0437\u0430 7 \u0434\u043d\u0435\u0439',
+          subtitle: '\u0414\u0438\u043d\u0430\u043c\u0438\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0445 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043f\u043e \u0432\u0441\u0435\u043c\u0443 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044e.',
+          items: chartData.messagesByDay || [],
+        }),
+        _renderAdminRankChart({
+          title: '\u0422\u043e\u043f \u0448\u043a\u043e\u043b',
+          subtitle: '\u0413\u0434\u0435 \u0441\u0435\u0439\u0447\u0430\u0441 \u0431\u043e\u043b\u044c\u0448\u0435 \u0432\u0441\u0435\u0433\u043e \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432.',
+          items: chartData.topSchoolsByUsers || [],
+        }),
+      ].join('');
     }
 
     const schools = Array.isArray(result.schools) ? result.schools : [];
@@ -1033,8 +1240,8 @@ const App = (() => {
         <div class="card">
           ${Avatar.html({ seed: school.school, chars: 2 })}
           <div class="card-body">
-            <div class="card-name">${escapeHtml(school.school)}</div>
-            <div class="card-sub">Всего: ${school.totalUsers} · Одобрено: ${school.approvedUsers} · Ожидают: ${school.pendingUsers}</div>
+            <div class="card-name">${escapeHtml(school.school || '')}</div>
+            <div class="card-sub">\u0412\u0441\u0435\u0433\u043e: ${escapeHtml(String(school.totalUsers ?? 0))} - \u041e\u0434\u043e\u0431\u0440\u0435\u043d\u043e: ${escapeHtml(String(school.approvedUsers ?? 0))} - \u041e\u0436\u0438\u0434\u0430\u044e\u0442: ${escapeHtml(String(school.pendingUsers ?? 0))}</div>
           </div>
         </div>
       `).join('');
@@ -1050,10 +1257,10 @@ const App = (() => {
         <div class="card">
           ${Avatar.html({ seed: user.nickname, imageUrl: user.avatarUrl || '' })}
           <div class="card-body">
-            <div class="card-name">${escapeHtml(user.nickname)}
-              <span class="level-badge ${user.role === 'admin' ? 'trusted' : 'known'}">${user.role === 'admin' ? 'Admin' : user.status}</span>
+            <div class="card-name">${escapeHtml(user.nickname || '')}
+              <span class="level-badge ${escapeAttr(user.role === 'admin' ? 'trusted' : 'known')}">${escapeHtml(user.role === 'admin' ? 'Admin' : String(user.status || ''))}</span>
             </div>
-            <div class="card-sub">${escapeHtml(user.fullName || '')} · ${escapeHtml(user.school || '')} · ${formatDate(user.createdAt)}</div>
+            <div class="card-sub">${escapeHtml(user.fullName || '')} - ${escapeHtml(user.school || '')} - ${escapeHtml(formatDate(user.createdAt))}</div>
           </div>
         </div>
       `).join('');
@@ -1069,20 +1276,321 @@ const App = (() => {
         <div class="card">
           ${Avatar.html({ seed: group.name, imageUrl: group.avatarUrl || '', chars: 2 })}
           <div class="card-body">
-            <div class="card-name">${escapeHtml(group.name)}
-              <span class="level-badge ${group.type === 'school_public' ? 'known' : 'trusted'}">${group.type === 'school_public' ? 'School' : 'Private'}</span>
+            <div class="card-name">${escapeHtml(group.name || '')}
+              <span class="level-badge ${escapeAttr(group.type === 'school_public' ? 'known' : 'trusted')}">${escapeHtml(group.type === 'school_public' ? 'School' : 'Private')}</span>
             </div>
-            <div class="card-sub">${escapeHtml(group.school || '')} · Участники: ${group.memberCount} · Админы: ${group.adminCount} · Сообщения: ${group.messageCount} · Фото: ${group.imageCount}</div>
+            <div class="card-sub">${escapeHtml(group.school || '')} - \u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438: ${escapeHtml(String(group.memberCount ?? 0))} - \u0410\u0434\u043c\u0438\u043d\u044b: ${escapeHtml(String(group.adminCount ?? 0))} - \u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f: ${escapeHtml(String(group.messageCount ?? 0))} - \u0424\u043e\u0442\u043e: ${escapeHtml(String(group.imageCount ?? 0))}</div>
           </div>
         </div>
       `).join('');
     }
+
+    await _renderAdminReports(requestId);
+  }
+
+  async function _renderAdminReports(requestId) {
+    const reportsList = $('#admin-reports-list');
+    const reportsEmpty = $('#admin-reports-empty');
+    if (!reportsList || !reportsEmpty) return;
+
+    const result = typeof API !== 'undefined' && typeof API.listReports === 'function'
+      ? await API.listReports('open')
+      : { ok: false, error: 'reports_unavailable' };
+
+    if (requestId !== _adminStatsRequest) return;
+
+    if (!result?.ok) {
+      reportsList.innerHTML = '';
+      reportsEmpty.textContent = 'Не удалось загрузить жалобы.';
+      reportsEmpty.classList.remove('hidden');
+      return;
+    }
+
+    const reports = Array.isArray(result.reports) ? result.reports : [];
+    if (reports.length === 0) {
+      reportsList.innerHTML = '';
+      reportsEmpty.textContent = 'Открытых жалоб пока нет.';
+      reportsEmpty.classList.remove('hidden');
+      return;
+    }
+
+    reportsEmpty.classList.add('hidden');
+    reportsList.innerHTML = reports.map((report) => {
+      const reporter = report.reporter || Credo.getUserById(report.reporterId) || {};
+      const target = report.target || Credo.getUserById(report.targetId) || {};
+      const reason = REPORT_REASON_LABELS[report.reason] || report.reason || 'other';
+      return `
+        <div class="card admin-report-card">
+          ${Avatar.html({ seed: target.nickname || report.targetId || 'target', imageUrl: target.avatarUrl || '' })}
+          <div class="card-body">
+            <div class="card-name">
+              @${escapeHtml(target.nickname || 'unknown')}
+              <span class="level-badge known">${escapeHtml(reason)}</span>
+            </div>
+            <div class="card-sub">Жалоба от @${escapeHtml(reporter.nickname || 'unknown')} · ${escapeHtml(formatDate(report.createdAt))}</div>
+            ${report.details ? `<div class="admin-report-details">${escapeHtml(report.details)}</div>` : ''}
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-outline btn-small" type="button" data-report-action="dismiss" data-report-id="${escapeAttr(report.id)}">Закрыть</button>
+            <button class="btn btn-danger btn-small" type="button" data-report-action="action" data-report-id="${escapeAttr(report.id)}">Принять меры</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    reportsList.querySelectorAll('[data-report-action]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const result = await API.reviewReport(button.dataset.reportId, button.dataset.reportAction);
+        if (!result?.ok) {
+          alert(_safetyErrorMessage(result?.error));
+          return;
+        }
+        _renderAdminReports(++_adminStatsRequest).catch(() => {});
+      });
+    });
+  }
+
+  function _renderAdminBarChart({ title, subtitle, items }) {
+    const normalized = Array.isArray(items) ? items : [];
+    if (!normalized.length) {
+      return `
+        <div class="admin-chart-card">
+          <div class="admin-chart-copy">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(subtitle)}</span>
+          </div>
+          <div class="search-empty-state">\u0414\u0430\u043d\u043d\u044b\u0445 \u0434\u043b\u044f \u0433\u0440\u0430\u0444\u0438\u043a\u0430 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.</div>
+        </div>
+      `;
+    }
+
+    const max = normalized.reduce((value, item) => Math.max(value, Number(item.count || item.value || 0)), 0);
+    return `
+      <div class="admin-chart-card">
+        <div class="admin-chart-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(subtitle)}</span>
+        </div>
+        <div class="admin-chart-bars">
+          ${normalized.map((item) => {
+            const value = Number(item.count || item.value || 0);
+            const height = max > 0 ? Math.max(10, Math.round((value / max) * 100)) : 10;
+            return `
+              <div class="admin-chart-bar">
+                <div class="admin-chart-bar-track">
+                  <span class="admin-chart-bar-fill" style="height:${escapeAttr(height)}%"></span>
+                </div>
+                <strong>${escapeHtml(String(value))}</strong>
+                <span>${escapeHtml(String(item.label || ''))}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function _renderAdminRankChart({ title, subtitle, items }) {
+    const normalized = Array.isArray(items) ? items : [];
+    if (!normalized.length) {
+      return `
+        <div class="admin-chart-card">
+          <div class="admin-chart-copy">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(subtitle)}</span>
+          </div>
+          <div class="search-empty-state">\u0414\u0430\u043d\u043d\u044b\u0445 \u0434\u043b\u044f \u0433\u0440\u0430\u0444\u0438\u043a\u0430 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.</div>
+        </div>
+      `;
+    }
+
+    const max = normalized.reduce((value, item) => Math.max(value, Number(item.value || 0)), 0);
+    return `
+      <div class="admin-chart-card">
+        <div class="admin-chart-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(subtitle)}</span>
+        </div>
+        <div class="admin-rank-list">
+          ${normalized.map((item) => {
+            const value = Number(item.value || 0);
+            const width = max > 0 ? Math.max(8, Math.round((value / max) * 100)) : 8;
+            const meta = item.pendingUsers ? ' - \u0437\u0430\u044f\u0432\u043e\u043a ' + item.pendingUsers : '';
+            return `
+              <div class="admin-rank-item">
+                <div class="admin-rank-head">
+                  <strong>${escapeHtml(String(item.label || ''))}</strong>
+                  <span>${escapeHtml(String(value) + ' \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432' + meta)}</span>
+                </div>
+                <div class="admin-rank-track">
+                  <div class="admin-rank-fill" style="width:${escapeAttr(width)}%"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }
 
   function _getGroupMemberIdentity(groupId, userId) {
     const group = Credo.getGroupById(groupId);
     if (!group || !Array.isArray(group.members)) return null;
     return group.members.find((member) => member.id === userId) || null;
+  }
+
+  function openSafetyModal(userId, mode = 'report') {
+    const target = Credo.getUserById(userId);
+    if (!target) return;
+
+    _safetyTargetUserId = userId;
+    _safetyMode = mode;
+
+    const modal = $('#safety-modal');
+    const title = $('#safety-modal-title');
+    const copy = $('#safety-modal-copy');
+    const form = $('#safety-report-form');
+    const primary = $('#safety-modal-primary');
+    const targetName = $('#safety-modal-target');
+    const details = $('#safety-report-details');
+    const reason = $('#safety-report-reason');
+
+    if (!modal || !title || !copy || !form || !primary || !targetName) return;
+
+    targetName.textContent = '@' + target.nickname;
+    if (details) details.value = '';
+    if (reason) reason.value = 'spam';
+
+    if (mode === 'report') {
+      title.textContent = 'Пожаловаться на участника';
+      copy.textContent = 'Жалоба попадет администраторам. Укажите причину и короткий комментарий, если нужно.';
+      primary.textContent = 'Отправить жалобу';
+      primary.className = 'btn btn-danger';
+      form.classList.remove('hidden');
+    } else {
+      const isUnblock = mode === 'unblock';
+      title.textContent = isUnblock ? 'Разблокировать участника' : 'Заблокировать участника';
+      copy.textContent = isUnblock
+        ? 'После разблокировки участник снова появится в списках и личные сообщения будут доступны.'
+        : 'Участник исчезнет из личных списков, а прямые сообщения и оценки между вами будут недоступны.';
+      primary.textContent = isUnblock ? 'Разблокировать' : 'Заблокировать';
+      primary.className = isUnblock ? 'btn btn-primary' : 'btn btn-danger';
+      form.classList.add('hidden');
+    }
+
+    modal.classList.remove('hidden');
+    primary.focus();
+  }
+
+  function closeSafetyModal() {
+    const modal = $('#safety-modal');
+    if (modal) modal.classList.add('hidden');
+    _safetyTargetUserId = null;
+    _safetyMode = 'report';
+  }
+
+  async function handleSafetyPrimary() {
+    const targetId = _safetyTargetUserId;
+    if (!targetId) return;
+    const completedMode = _safetyMode;
+
+    const primary = $('#safety-modal-primary');
+    if (primary) primary.disabled = true;
+
+    let result;
+    if (_safetyMode === 'report') {
+      const reason = $('#safety-report-reason')?.value || 'spam';
+      const details = $('#safety-report-details')?.value || '';
+      result = typeof API !== 'undefined' && typeof API.reportUser === 'function'
+        ? await API.reportUser(targetId, reason, details)
+        : { ok: false, error: 'report_unavailable' };
+    } else if (_safetyMode === 'unblock') {
+      result = typeof API !== 'undefined' && typeof API.unblockUser === 'function'
+        ? await API.unblockUser(targetId)
+        : Credo.unblockUserLocal(Credo.getCurrentUserId(), targetId);
+    } else {
+      result = typeof API !== 'undefined' && typeof API.blockUser === 'function'
+        ? await API.blockUser(targetId)
+        : Credo.blockUserLocal(Credo.getCurrentUserId(), targetId);
+    }
+
+    if (primary) primary.disabled = false;
+
+    if (!result?.ok) {
+      alert(_safetyErrorMessage(result?.error));
+      return;
+    }
+
+    closeSafetyModal();
+    if (completedMode === 'report') {
+      alert('Жалоба отправлена.');
+    }
+
+    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
+    if (_currentScreen === 'userProfile' && currentProfileUser) {
+      openUserProfile(currentProfileUser, _profileReturnState);
+      return;
+    }
+    if (completedMode === 'block' && _currentScreen === 'chat') {
+      currentChatPartner = null;
+      refreshAll();
+      return;
+    }
+    if (_currentScreen === 'chat' && currentChatPartner) {
+      openChat(currentChatPartner);
+      return;
+    }
+    if (_currentScreen === 'settings' && currentUser) {
+      renderSettingsScreen(currentUser);
+      return;
+    }
+    if (currentUser) {
+      renderMainScreen(currentUser);
+      showTab(_activeTab);
+    }
+  }
+
+  function renderUserProfileActions(actions, user, viewer) {
+    if (!actions) return;
+
+    if (user.id === viewer.id) {
+      actions.innerHTML = `
+        <button class="btn btn-outline btn-small" type="button" data-open-own-profile>Мой профиль</button>
+        <button class="btn btn-primary btn-small" type="button" data-open-settings>Настройки</button>
+      `;
+
+      const ownProfileBtn = actions.querySelector('[data-open-own-profile]');
+      if (ownProfileBtn) {
+        ownProfileBtn.addEventListener('click', () => {
+          showScreen('main');
+          const me = Credo.getUserById(Credo.getCurrentUserId());
+          if (me) renderMainScreen(me);
+          showTab('profile');
+        });
+      }
+
+      const settingsBtn = actions.querySelector('[data-open-settings]');
+      if (settingsBtn) settingsBtn.addEventListener('click', openSettingsScreen);
+      return;
+    }
+
+    const isBlocked = _isBlockedPeer(user.id);
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-small" type="button" data-open-profile-chat="${escapeAttr(user.id)}"${isBlocked ? ' disabled' : ''}>${isBlocked ? 'Заблокировано' : 'Написать'}</button>
+      <button class="btn btn-outline btn-small" type="button" data-report-profile-user="${escapeAttr(user.id)}">Пожаловаться</button>
+      <button class="btn ${isBlocked ? 'btn-outline' : 'btn-danger'} btn-small" type="button" data-toggle-profile-block="${escapeAttr(user.id)}" data-block-mode="${isBlocked ? 'unblock' : 'block'}">${isBlocked ? 'Разблокировать' : 'Заблокировать'}</button>
+    `;
+
+    const chatBtn = actions.querySelector('[data-open-profile-chat]');
+    if (chatBtn) chatBtn.addEventListener('click', () => openChat(chatBtn.dataset.openProfileChat));
+
+    const reportBtn = actions.querySelector('[data-report-profile-user]');
+    if (reportBtn) reportBtn.addEventListener('click', () => openSafetyModal(reportBtn.dataset.reportProfileUser, 'report'));
+
+    const blockBtn = actions.querySelector('[data-toggle-profile-block]');
+    if (blockBtn) {
+      blockBtn.addEventListener('click', () => openSafetyModal(blockBtn.dataset.toggleProfileBlock, blockBtn.dataset.blockMode));
+    }
   }
 
   function openUserProfile(userId, returnState = null) {
@@ -1120,7 +1628,7 @@ const App = (() => {
           });
         }
       } else {
-        actions.innerHTML = `<button class="btn btn-primary btn-small" type="button" data-open-profile-chat="${user.id}">Написать</button>`;
+        actions.innerHTML = `<button class="btn btn-primary btn-small" type="button" data-open-profile-chat="${escapeAttr(user.id)}">Написать</button>`;
         const chatBtn = actions.querySelector('[data-open-profile-chat]');
         if (chatBtn) {
           chatBtn.addEventListener('click', () => openChat(chatBtn.dataset.openProfileChat));
@@ -1128,6 +1636,7 @@ const App = (() => {
       }
     }
 
+    renderUserProfileActions(actions, user, viewer);
     showScreen('userProfile');
   }
 
@@ -1163,6 +1672,12 @@ const App = (() => {
     const me = Credo.getUserById(Credo.getCurrentUserId());
     const partner = Credo.getUserById(partnerId);
     if (!me || !partner) return;
+    if (_isBlockedPeer(partnerId)) {
+      alert('Личный чат недоступен из-за блокировки.');
+      currentChatPartner = null;
+      refreshAll();
+      return;
+    }
 
     const level = Credo.getCredLevel(partner.cred);
 
@@ -1175,6 +1690,17 @@ const App = (() => {
     if (profileBtn) {
       profileBtn.disabled = false;
       profileBtn.onclick = () => openUserProfile(partner.id, { type: 'chat' });
+    }
+    const reportBtn = $('#chat-partner-report-btn');
+    if (reportBtn) {
+      reportBtn.classList.remove('hidden');
+      reportBtn.onclick = () => openSafetyModal(partner.id, 'report');
+    }
+    const blockBtn = $('#chat-partner-block-btn');
+    if (blockBtn) {
+      blockBtn.classList.remove('hidden');
+      blockBtn.textContent = 'Заблокировать';
+      blockBtn.onclick = () => openSafetyModal(partner.id, 'block');
     }
 
     // Цветовая индикация уровня партнёра в шапке чата
@@ -1220,6 +1746,16 @@ const App = (() => {
     if (profileBtn) {
       profileBtn.disabled = true;
       profileBtn.onclick = null;
+    }
+    const reportBtn = $('#chat-partner-report-btn');
+    if (reportBtn) {
+      reportBtn.classList.add('hidden');
+      reportBtn.onclick = null;
+    }
+    const blockBtn = $('#chat-partner-block-btn');
+    if (blockBtn) {
+      blockBtn.classList.add('hidden');
+      blockBtn.onclick = null;
     }
 
     const credEl = $('#chat-partner-cred');
@@ -1288,21 +1824,21 @@ const App = (() => {
         : null;
       const showSender = Boolean(sender);
       return `
-        <div class="msg ${isMine ? 'sent' : 'received'}">
+        <div class="msg ${escapeAttr(isMine ? 'sent' : 'received')}">
           ${showSender ? `
             <div class="msg-author">
-              <button class="msg-author-avatar-btn" type="button" data-open-user-profile="${sender.id}" title="Открыть профиль">
+              <button class="msg-author-avatar-btn" type="button" data-open-user-profile="${escapeAttr(sender.id)}" title="Открыть профиль">
                 ${Avatar.html({ seed: sender.nickname, imageUrl: sender.avatarUrl || '', extraClass: 'msg-author-avatar' })}
               </button>
-              <button class="msg-author-name-btn" type="button" data-open-user-profile="${sender.id}" title="Открыть профиль">
-                <span class="msg-author-name">@${escapeHtml(sender.nickname)}</span>
+              <button class="msg-author-name-btn" type="button" data-open-user-profile="${escapeAttr(sender.id)}" title="Открыть профиль">
+                <span class="msg-author-name">@${escapeHtml(sender.nickname || '')}</span>
               </button>
             </div>` : ''}
-          ${m.attachmentUrl ? `<a class="msg-image-link" href="${escapeHtml(m.attachmentUrl)}" target="_blank" rel="noopener noreferrer"><img class="msg-image" src="${escapeHtml(m.attachmentUrl)}" alt="attachment"></a>` : ''}
+          ${m.attachmentUrl ? `<a class="msg-image-link" href="${escapeAttr(m.attachmentUrl)}" target="_blank" rel="noopener noreferrer"><img class="msg-image" src="${escapeAttr(m.attachmentUrl)}" alt="attachment"></a>` : ''}
           ${m.text ? `<div class="msg-text">${escapeHtml(m.text)}</div>` : ''}
           <div class="msg-footer">
             <div class="msg-actions"><button class="msg-react-btn" aria-label="Реакция" title="Добавить реакцию">+</button></div>
-            <div class="msg-time">${timeStr}</div>
+            <div class="msg-time">${escapeHtml(timeStr)}</div>
           </div>
         </div>`;
     }).join('');
@@ -1326,6 +1862,11 @@ const App = (() => {
     const myId = Credo.getCurrentUserId();
     const partnerId = currentChatPartner;
     const groupId = currentChatGroup;
+
+    if (partnerId && _isBlockedPeer(partnerId)) {
+      alert('Личные сообщения недоступны из-за блокировки.');
+      return;
+    }
 
     // Сбросить «печатает» до отправки
     clearTimeout(_typingDebounceTimer);
@@ -1361,7 +1902,7 @@ const App = (() => {
 
     if (!result?.ok) {
       renderChatMessages(myId);
-      alert('Send failed: ' + (result.error || 'unknown_error'));
+      alert(_safetyErrorMessage(result.error || 'send_failed'));
       return;
     }
 
@@ -1516,16 +2057,16 @@ const App = (() => {
     container.innerHTML = toRate.map(u => {
       const level = Credo.getCredLevel(u.cred);
       return `
-        <div class="rate-card" data-rate-user="${u.id}">
+        <div class="rate-card" data-rate-user="${escapeAttr(u.id)}">
           ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
           <div class="card-body">
-            <div class="card-name">${u.nickname}
-              <span class="level-badge ${level.css}">${level.name}</span>
+            <div class="card-name">${escapeHtml(u.nickname || '')}
+              <span class="level-badge ${escapeAttr(level.css)}">${escapeHtml(level.name)}</span>
             </div>
           </div>
-          <div class="star-rating" data-target="${u.id}">
+          <div class="star-rating" data-target="${escapeAttr(u.id)}">
             ${[1,2,3,4,5].map(n =>
-              `<button class="star" data-star="${n}" data-for="${u.id}">&#9733;</button>`
+              `<button class="star" data-star="${escapeAttr(n)}" data-for="${escapeAttr(u.id)}">&#9733;</button>`
             ).join('')}
           </div>
         </div>`;
@@ -1595,7 +2136,7 @@ const App = (() => {
     e.preventDefault();
 
     const fullName = $('#reg-fullname').value.trim();
-    const school   = $('#reg-school').value.trim();
+    const school   = ($('#reg-school')?.value ?? '').trim();
     const grade    = $('#reg-grade').value.trim();
     const nickname = $('#reg-nickname').value.trim();
     const phone    = ($('#reg-phone')?.value ?? '').trim();
@@ -1618,7 +2159,7 @@ const App = (() => {
         fullName_taken:      'Пользователь с таким ФИО уже существует.',
         rate_limit_exceeded: 'Слишком много попыток регистрации. Попробуйте позже.',
         fullName_required:   'Введите ФИО.',
-        school_required:     'Введите название школы.',
+        school_required:     'Выберите школу.',
         grade_required:      'Введите класс.',
         nickname_required:   'Введите никнейм.',
       };
@@ -1792,13 +2333,13 @@ const App = (() => {
         const status = u.status === 'pending' ? ' (pending)'
                      : u.status === 'rejected' ? ' (rejected)' : '';
 
-        return `<option value="${u.id}"${sel}>@${u.nickname}${status}</option>`;
+        return `<option value="${escapeAttr(u.id)}"${sel}>@${escapeHtml(u.nickname || '')}${escapeHtml(status)}</option>`;
       }).join('');
 
     _renderDemoMenu(users, currentId);
   }
 
-  function handleDemoSwitch(forcedId) {
+  async function handleDemoSwitch(forcedId) {
     const currentUser = Credo.getUserById(Credo.getCurrentUserId());
     if (!_isAdmin(currentUser)) return;
 
@@ -1807,6 +2348,24 @@ const App = (() => {
     if (select.value !== id) {
       select.value = id;
     }
+
+    if (_isBackendMode() && typeof API !== 'undefined' && typeof API.switchAccount === 'function') {
+      const result = await API.switchAccount(id);
+      if (!result?.ok) {
+        if (select) select.value = currentUser?.id || '';
+        _renderDemoMenu(_getLocalAccounts(), currentUser?.id || '');
+        if (result.error === 'login_required') {
+          alert('Для этого аккаунта нужно заново войти, чтобы восстановить серверную сессию.');
+        } else {
+          alert('Не удалось переключить аккаунт: ' + (result.error || 'unknown_error'));
+        }
+        return;
+      }
+      _resetUIState();
+      route();
+      return;
+    }
+
     if (id) {
       Credo.setCurrentUserId(id);
     } else {
@@ -1910,6 +2469,16 @@ const App = (() => {
       }
     }
 
+    if (_currentScreen === 'settings') {
+      renderSettingsScreen(user);
+      return;
+    }
+
+    if (_currentScreen === 'userProfile' && currentProfileUser) {
+      openUserProfile(currentProfileUser, _profileReturnState);
+      return;
+    }
+
     if (_currentScreen === 'main') {
       renderMainScreen(user);
       showTab(_activeTab);
@@ -1929,6 +2498,12 @@ const App = (() => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function escapeAttr(text) {
+    return escapeHtml(String(text ?? ''))
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function formatDate(iso) {
@@ -1969,7 +2544,7 @@ const App = (() => {
     // Кнопка "Регистрация" на экране логина
     const regLink = $('#login-register-link');
     if (regLink) {
-      regLink.addEventListener('click', () => showScreen('register'));
+      regLink.addEventListener('click', () => openExperience('register'));
     }
     $$('[data-open-login]').forEach((button) => {
       button.addEventListener('click', () => openExperience('login'));
@@ -1977,6 +2552,42 @@ const App = (() => {
     $$('[data-open-register]').forEach((button) => {
       button.addEventListener('click', () => openExperience('register'));
     });
+
+    const onboardingNext = $('#onboarding-next-btn');
+    if (onboardingNext) onboardingNext.addEventListener('click', handleOnboardingNext);
+    const onboardingSkip = $('#onboarding-skip-btn');
+    if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
+
+    const profileSettingsBtn = $('#profile-settings-btn');
+    if (profileSettingsBtn) profileSettingsBtn.addEventListener('click', openSettingsScreen);
+    const settingsBackBtn = $('#settings-back-btn');
+    if (settingsBackBtn) {
+      settingsBackBtn.addEventListener('click', () => {
+        const user = Credo.getUserById(Credo.getCurrentUserId());
+        showScreen('main');
+        if (user) renderMainScreen(user);
+        showTab('profile');
+      });
+    }
+    const settingsLogoutBtn = $('#settings-logout-btn');
+    if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', handleDemoLogout);
+    const settingsToggle = $('#settings-notifications-toggle');
+    if (settingsToggle) {
+      settingsToggle.addEventListener('change', () => {
+        Credo.setSetting('notificationsEnabled', settingsToggle.checked);
+      });
+    }
+
+    const safetyPrimary = $('#safety-modal-primary');
+    if (safetyPrimary) safetyPrimary.addEventListener('click', handleSafetyPrimary);
+    const safetyCancel = $('#safety-modal-cancel');
+    if (safetyCancel) safetyCancel.addEventListener('click', closeSafetyModal);
+    const safetyModal = $('#safety-modal');
+    if (safetyModal) {
+      safetyModal.addEventListener('click', (event) => {
+        if (event.target === safetyModal) closeSafetyModal();
+      });
+    }
 
     // Навигация по вкладкам
     $$('.nav-btn').forEach(btn => {
@@ -2083,7 +2694,10 @@ const App = (() => {
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') _setDemoMenuOpen(false);
+      if (event.key === 'Escape') {
+        _setDemoMenuOpen(false);
+        closeSafetyModal();
+      }
     });
 
     if (typeof API !== 'undefined' && API.SYNC_EVENT) {
@@ -2095,8 +2709,8 @@ const App = (() => {
     });
 
     const openMode = new URLSearchParams(window.location.search).get('open');
-    if (openMode === 'dashboard') {
-      openDashboardExperience();
+    if (openMode === 'dashboard' || openMode === 'register') {
+      openExperience('register');
       if (window.history && typeof window.history.replaceState === 'function') {
         window.history.replaceState({}, document.title, window.location.pathname);
       }

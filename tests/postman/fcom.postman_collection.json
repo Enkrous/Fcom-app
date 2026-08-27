@@ -2,28 +2,152 @@
   "info": {
     "_postman_id": "fcom-backend-tests-v1",
     "name": "Fcom Backend Tests",
-    "description": "Full test suite for Fcom / Кредо backend — Supabase Edge Functions.\n\nPrerequisites:\n1. Set the `base_url` environment variable.\n2. Apply all 19 migrations + seed.sql.\n3. Leave SMS_API_URL empty (dev OTP mode).\n4. Run folders in order: Auth → Registration → OTP → Password → Login → Approve → Messages → Rate → Security.",
+    "description": "Portable manual regression suite for Fcom backend - vanilla HTML/CSS/JS SPA plus Supabase Edge Functions.\n\nPrerequisites:\n1. Set `base_url` to the Edge Functions base URL.\n2. Apply the required Supabase migrations before running backend tests.\n3. Use seed.sql only in local/dev or disposable staging; never production.\n4. Leave SMS_API_URL empty for dev OTP mode, or adjust OTP tests for a real SMS provider.\n5. Set `supabase_url` and `supabase_anon_key` for direct PostgREST negative security checks.\n6. Use an approved admin token for admin folders. Auth Setup captures `admin_token` from `alice` only when `alice.role === \"admin\"`; otherwise set `admin_token` manually.\n7. For media upload, select a small local image file in MU-01 or set `media_file_path` in Postman.\n8. Run folders in order: Auth Setup -> Registration -> OTP Verification -> Set Password -> Login / Logout -> Approve / Reject -> Messages -> Credo Rating -> Groups -> Media Upload -> Safety Reports / Blocks -> Admin Stats -> Group and Safety Table Security -> Security.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url",    "value": "https://vzjlhiqvfgrrlfdgyebx.supabase.co/functions/v1" },
-    { "key": "alice_token", "value": "" },
-    { "key": "bob_token",   "value": "" },
-    { "key": "carol_token", "value": "" },
-    { "key": "reg_token",   "value": "" },
-    { "key": "seed_password", "value": "testpass" },
-    { "key": "new_user_id", "value": "" },
-    { "key": "new_phone",   "value": "+79009876543" },
-    { "key": "dev_otp",     "value": "" },
-    { "key": "alice_id",    "value": "00000000-0000-0000-0000-000000000001" },
-    { "key": "bob_id",      "value": "00000000-0000-0000-0000-000000000002" },
-    { "key": "carol_id",    "value": "00000000-0000-0000-0000-000000000003" },
-    { "key": "dave_id",     "value": "00000000-0000-0000-0000-000000000004" },
-    { "key": "eve_id",      "value": "00000000-0000-0000-0000-000000000005" },
-    { "key": "frank_id",    "value": "00000000-0000-0000-0000-000000000006" }
+    {
+      "key": "base_url",
+      "value": "https://vzjlhiqvfgrrlfdgyebx.supabase.co/functions/v1"
+    },
+    {
+      "key": "alice_token",
+      "value": ""
+    },
+    {
+      "key": "bob_token",
+      "value": ""
+    },
+    {
+      "key": "carol_token",
+      "value": ""
+    },
+    {
+      "key": "reg_token",
+      "value": ""
+    },
+    {
+      "key": "seed_password",
+      "value": "testpass"
+    },
+    {
+      "key": "new_user_id",
+      "value": ""
+    },
+    {
+      "key": "new_phone",
+      "value": "+79009876543"
+    },
+    {
+      "key": "dev_otp",
+      "value": ""
+    },
+    {
+      "key": "alice_id",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-0000-0000-000000000002"
+    },
+    {
+      "key": "carol_id",
+      "value": "00000000-0000-0000-0000-000000000003"
+    },
+    {
+      "key": "dave_id",
+      "value": "00000000-0000-0000-0000-000000000004"
+    },
+    {
+      "key": "eve_id",
+      "value": "00000000-0000-0000-0000-000000000005"
+    },
+    {
+      "key": "frank_id",
+      "value": "00000000-0000-0000-0000-000000000006"
+    },
+    {
+      "key": "supabase_url",
+      "value": "https://vzjlhiqvfgrrlfdgyebx.supabase.co"
+    },
+    {
+      "key": "supabase_anon_key",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "admin_school",
+      "value": ""
+    },
+    {
+      "key": "logout_token",
+      "value": ""
+    },
+    {
+      "key": "first_school_user_id",
+      "value": ""
+    },
+    {
+      "key": "reject_user_id",
+      "value": ""
+    },
+    {
+      "key": "group_id",
+      "value": ""
+    },
+    {
+      "key": "group_name",
+      "value": ""
+    },
+    {
+      "key": "school_public_group_id",
+      "value": ""
+    },
+    {
+      "key": "bob_invite_id",
+      "value": ""
+    },
+    {
+      "key": "carol_invite_id",
+      "value": ""
+    },
+    {
+      "key": "group_message_id",
+      "value": ""
+    },
+    {
+      "key": "media_file_path",
+      "value": ""
+    },
+    {
+      "key": "media_path",
+      "value": ""
+    },
+    {
+      "key": "media_mime",
+      "value": "image/png"
+    },
+    {
+      "key": "media_bytes",
+      "value": "1"
+    },
+    {
+      "key": "media_width",
+      "value": "1"
+    },
+    {
+      "key": "media_height",
+      "value": "1"
+    },
+    {
+      "key": "report_id",
+      "value": ""
+    }
   ],
   "item": [
-
     {
       "name": "0. Auth Setup — Login seed users",
       "description": "Run first to populate tokens for all other test folders.",
@@ -33,46 +157,97 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('alice login ok', () => pm.expect(r.ok).to.be.true);",
-            "if (r.ok && r.token) pm.collectionVariables.set('alice_token', r.token);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('alice login ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('alice is approved', () => pm.expect(r.user.status).to.equal('approved'));",
+                  "if (r.ok && r.token) pm.collectionVariables.set('alice_token', r.token);",
+                  "if (r.user && r.user.role === 'admin' && r.token) pm.collectionVariables.set('admin_token', r.token);",
+                  "if (r.user && r.user.id) pm.collectionVariables.set('alice_id', r.user.id);",
+                  "if (r.user && r.user.school) pm.collectionVariables.set('admin_school', r.user.school);",
+                  "if (r.user && r.user.role !== 'admin') console.warn('Set admin_token manually before admin/approval folders; alice is not admin in this environment.');"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Login bob",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('bob login ok', () => pm.expect(r.ok).to.be.true);",
-            "if (r.ok && r.token) pm.collectionVariables.set('bob_token', r.token);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('bob login ok', () => pm.expect(r.ok).to.be.true);",
+                  "if (r.ok && r.token) pm.collectionVariables.set('bob_token', r.token);",
+                  "if (r.user && r.user.id) pm.collectionVariables.set('bob_id', r.user.id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Login carol",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"carol\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"carol\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('carol login ok', () => pm.expect(r.ok).to.be.true);",
-            "if (r.ok && r.token) pm.collectionVariables.set('carol_token', r.token);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('carol login ok', () => pm.expect(r.ok).to.be.true);",
+                  "if (r.ok && r.token) pm.collectionVariables.set('carol_token', r.token);",
+                  "if (r.user && r.user.id) pm.collectionVariables.set('carol_id', r.user.id);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "1. Registration",
       "item": [
@@ -81,175 +256,388 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тестов Тест Тестович\",\"school\":\"Школа №99\",\"grade\":\"9А\",\"nickname\":\"testuser1\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Тестов Тест Тестович\",\"school\":\"Школа №99\",\"grade\":\"9А\",\"nickname\":\"testuser1\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-01 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('R-01 user has id', () => pm.expect(r.user).to.have.property('id'));",
-            "pm.test('R-01 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
-            "pm.test('R-01 token issued', () => pm.expect(r.token).to.be.a('string'));",
-            "pm.test('R-01 cred is 0', () => pm.expect(Number(r.user.cred)).to.equal(0));",
-            "pm.test('R-01 phoneVerified false', () => pm.expect(r.user.phoneVerified).to.be.false);",
-            "if (r.user) pm.collectionVariables.set('new_user_id', r.user.id);",
-            "if (r.token) pm.collectionVariables.set('reg_token', r.token);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('R-01 user has id', () => pm.expect(r.user).to.have.property('id'));",
+                  "pm.test('R-01 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
+                  "pm.test('R-01 role member', () => pm.expect(r.user.role).to.equal('member'));",
+                  "pm.test('R-01 token issued', () => pm.expect(r.token).to.be.a('string'));",
+                  "pm.test('R-01 cred is 0', () => pm.expect(Number(r.user.cred)).to.equal(0));",
+                  "pm.test('R-01 phoneVerified false', () => pm.expect(r.user.phoneVerified).to.be.false);",
+                  "if (r.user) pm.collectionVariables.set('new_user_id', r.user.id);",
+                  "if (r.token) pm.collectionVariables.set('reg_token', r.token);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-02 Happy path — with phone (dev mode OTP)",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Звонков Зинаида Зиновьевна\",\"school\":\"Школа №88\",\"grade\":\"10Б\",\"nickname\":\"zvonkova\",\"phone\":\"{{new_phone}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Звонков Зинаида Зиновьевна\",\"school\":\"Школа №88\",\"grade\":\"10Б\",\"nickname\":\"zvonkova\",\"phone\":\"{{new_phone}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-02 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('R-02 _devOtp present in dev mode', () => pm.expect(r._devOtp).to.be.a('string'));",
-            "pm.test('R-02 _devOtp is 6 digits', () => pm.expect(r._devOtp).to.match(/^\\d{6}$/));",
-            "pm.test('R-02 phoneVerified false initially', () => pm.expect(r.user.phoneVerified).to.be.false);",
-            "if (r._devOtp) pm.collectionVariables.set('dev_otp', r._devOtp);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-02 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('R-02 _devOtp present in dev mode', () => pm.expect(r._devOtp).to.be.a('string'));",
+                  "pm.test('R-02 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
+                  "pm.test('R-02 _devOtp is 6 digits', () => pm.expect(r._devOtp).to.match(/^\\d{6}$/));",
+                  "pm.test('R-02 phoneVerified false initially', () => pm.expect(r.user.phoneVerified).to.be.false);",
+                  "if (r._devOtp) pm.collectionVariables.set('dev_otp', r._devOtp);"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "R-03 First user in new school → auto-approved",
+          "name": "R-03 First user in new school stays pending",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Первый Пользователь Новой Школы\",\"school\":\"Уникальная Школа №777\",\"grade\":\"11А\",\"nickname\":\"firstschool777\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Первый Пользователь Новой Школы\",\"school\":\"Уникальная Школа №777\",\"grade\":\"11А\",\"nickname\":\"firstschool777\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-03 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('R-03 auto-approved', () => pm.expect(r.user.status).to.equal('approved'));",
-            "pm.test('R-03 cred = 1', () => pm.expect(Number(r.user.cred)).to.equal(1));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-03 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('R-03 stays pending', () => pm.expect(r.user.status).to.equal('pending'));",
+                  "pm.test('R-03 cred = 0', () => pm.expect(Number(r.user.cred)).to.equal(0));",
+                  "if (r.user && r.user.id) pm.collectionVariables.set('first_school_user_id', r.user.id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-04 Missing fullName → fullName_required",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"school\":\"Школа\",\"grade\":\"9А\",\"nickname\":\"noname\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"school\":\"Школа\",\"grade\":\"9А\",\"nickname\":\"noname\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-04 not ok', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('R-04 error', () => pm.expect(r.error).to.equal('fullName_required'));",
-            "pm.test('R-04 HTTP 400', () => pm.expect(pm.response.code).to.equal(400));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-04 not ok', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('R-04 error', () => pm.expect(r.error).to.equal('fullName_required'));",
+                  "pm.test('R-04 HTTP 400', () => pm.expect(pm.response.code).to.equal(400));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-05 Missing school → school_required",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тест Тестов\",\"grade\":\"9А\",\"nickname\":\"noschool\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Тест Тестов\",\"grade\":\"9А\",\"nickname\":\"noschool\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-05 school_required', () => pm.expect(r.error).to.equal('school_required'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-05 school_required', () => pm.expect(r.error).to.equal('school_required'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-06 Missing grade → grade_required",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"nickname\":\"nograde\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"nickname\":\"nograde\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-06 grade_required', () => pm.expect(r.error).to.equal('grade_required'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-06 grade_required', () => pm.expect(r.error).to.equal('grade_required'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-07 Missing nickname → nickname_required",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"grade\":\"9А\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"grade\":\"9А\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-07 nickname_required', () => pm.expect(r.error).to.equal('nickname_required'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-07 nickname_required', () => pm.expect(r.error).to.equal('nickname_required'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-08 Duplicate nickname (exact) → nickname_taken",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"alice\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"alice\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-08 nickname_taken', () => pm.expect(r.error).to.equal('nickname_taken'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-08 nickname_taken', () => pm.expect(r.error).to.equal('nickname_taken'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-09 Duplicate nickname case-insensitive → nickname_taken",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"ALICE\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"ALICE\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-09 nickname_taken (case-insensitive)', () => pm.expect(r.error).to.equal('nickname_taken'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-09 nickname_taken (case-insensitive)', () => pm.expect(r.error).to.equal('nickname_taken'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-10 Duplicate phone → phone_taken",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"Другой Борис\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"notbob\",\"phone\":\"+79001000002\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Другой Борис\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"notbob\",\"phone\":\"+79001000002\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-10 phone_taken', () => pm.expect(r.error).to.equal('phone_taken'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-10 phone_taken', () => pm.expect(r.error).to.equal('phone_taken'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-11 Duplicate fullName case-insensitive → fullName_taken",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"fullName\":\"иванова алиса сергеевна\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"aliceclone\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"иванова алиса сергеевна\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"aliceclone\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-11 fullName_taken (case-insensitive)', () => pm.expect(r.error).to.equal('fullName_taken'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-11 fullName_taken (case-insensitive)', () => pm.expect(r.error).to.equal('fullName_taken'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "R-15 Invalid JSON → invalid_json",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "this is not json" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "this is not json"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('R-15 invalid_json', () => pm.expect(r.error).to.equal('invalid_json'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-15 invalid_json', () => pm.expect(r.error).to.equal('invalid_json'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "R-12 Register pending target in admin school",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Postman Reject Target {{$timestamp}}\",\"school\":\"{{admin_school}}\",\"grade\":\"9A\",\"nickname\":\"reject{{$timestamp}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('R-12 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('R-12 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
+                  "pm.test('R-12 role member', () => pm.expect(r.user.role).to.equal('member'));",
+                  "if (r.user && r.user.id) pm.collectionVariables.set('reject_user_id', r.user.id);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "2. OTP Verification",
       "item": [
@@ -258,92 +646,181 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/verify-phone",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"phone\":\"{{new_phone}}\",\"code\":\"{{dev_otp}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"{{new_phone}}\",\"code\":\"{{dev_otp}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('O-01 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('O-01 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('O-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('O-01 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "O-02 Dev universal bypass code 000000",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/verify-phone",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"phone\":\"{{new_phone}}\",\"code\":\"000000\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"{{new_phone}}\",\"code\":\"000000\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('O-02 bypass code accepted or already verified', () => {",
-            "  pm.expect(r.ok === true || r.error === 'otp_not_found_or_expired').to.be.true;",
-            "});"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('O-02 bypass code accepted or already verified', () => {",
+                  "  pm.expect(r.ok === true || r.error === 'otp_not_found_or_expired').to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "O-03 Wrong code → invalid_code + attemptsLeft",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/verify-phone",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"phone\":\"+79001000004\",\"code\":\"999999\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"+79001000004\",\"code\":\"999999\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('O-03 invalid_code or expired', () => {",
-            "  pm.expect(['invalid_code','otp_not_found_or_expired']).to.include(r.error);",
-            "});",
-            "if (r.error === 'invalid_code') {",
-            "  pm.test('O-03 attemptsLeft is number', () => pm.expect(r.attemptsLeft).to.be.a('number'));",
-            "}"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('O-03 invalid_code or expired', () => {",
+                  "  pm.expect(['invalid_code','otp_not_found_or_expired']).to.include(r.error);",
+                  "});",
+                  "if (r.error === 'invalid_code') {",
+                  "  pm.test('O-03 attemptsLeft is number', () => pm.expect(r.attemptsLeft).to.be.a('number'));",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "O-07 Unknown phone → user_not_found",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/verify-phone",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"phone\":\"+70000000000\",\"code\":\"123456\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"+70000000000\",\"code\":\"123456\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('O-07 user_not_found', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('O-07 HTTP 404', () => pm.expect(pm.response.code).to.equal(404));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('O-07 user_not_found', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('O-07 HTTP 404', () => pm.expect(pm.response.code).to.equal(404));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "O-11 Resend OTP",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/resend-otp",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"phone\":\"+79001000004\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"+79001000004\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('O-11 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('O-11 new _devOtp present', () => pm.expect(r._devOtp).to.be.a('string'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('O-11 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('O-11 new _devOtp present', () => pm.expect(r._devOtp).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "O-13 Resend — unknown phone → user_not_found",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/resend-otp",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"phone\":\"+70000000000\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"+70000000000\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('O-13 user_not_found', () => pm.expect(r.ok).to.be.false);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('O-13 user_not_found', () => pm.expect(r.ok).to.be.false);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "3. Set Password",
       "item": [
@@ -353,30 +830,61 @@
             "method": "POST",
             "url": "{{base_url}}/set-password",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{reg_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reg_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"password\":\"{{seed_password}}\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('P-01 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('P-01 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('P-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('P-01 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "P-02 No token → unauthorized",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/set-password",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('P-02 unauthorized', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('P-02 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('P-02 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('P-02 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "P-04 Missing password → password_required",
@@ -384,150 +892,491 @@
             "method": "POST",
             "url": "{{base_url}}/set-password",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('P-04 password_required', () => pm.expect(r.error).to.equal('password_required'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('P-04 password_required', () => pm.expect(r.error).to.equal('password_required'));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
-      "name": "4. Login",
+      "name": "4. Login / Logout",
       "item": [
         {
           "name": "L-01 Happy path → token issued",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('L-01 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('L-01 token string', () => pm.expect(r.token).to.be.a('string'));",
-            "pm.test('L-01 user has id', () => pm.expect(r.user.id).to.be.a('string'));",
-            "pm.test('L-01 user has nickname', () => pm.expect(r.user.nickname).to.equal('alice'));",
-            "pm.test('L-01 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
-            "pm.test('L-01 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
-            "if (r.token) pm.collectionVariables.set('alice_token', r.token);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('L-01 token string', () => pm.expect(r.token).to.be.a('string'));",
+                  "pm.test('L-01 user has id', () => pm.expect(r.user.id).to.be.a('string'));",
+                  "pm.test('L-01 user has nickname', () => pm.expect(r.user.nickname).to.equal('alice'));",
+                  "pm.test('L-01 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
+                  "pm.test('L-01 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
+                  "if (r.token) pm.collectionVariables.set('alice_token', r.token);",
+                  "if (r.user && r.user.role === 'admin' && r.token) pm.collectionVariables.set('admin_token', r.token);",
+                  "if (r.user && r.user.school) pm.collectionVariables.set('admin_school', r.user.school);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "L-02 Wrong password → invalid_credentials",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"alice\",\"password\":\"wrongpassword\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"alice\",\"password\":\"wrongpassword\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('L-02 invalid_credentials', () => pm.expect(r.error).to.equal('invalid_credentials'));",
-            "pm.test('L-02 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-02 invalid_credentials', () => pm.expect(r.error).to.equal('invalid_credentials'));",
+                  "pm.test('L-02 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "L-03 Unknown nickname → invalid_credentials",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"nobody\",\"password\":\"test\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"nobody\",\"password\":\"test\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('L-03 invalid_credentials', () => pm.expect(r.error).to.equal('invalid_credentials'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-03 invalid_credentials', () => pm.expect(r.error).to.equal('invalid_credentials'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "L-04 Pending user → account_not_approved",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"dave\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"dave\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('L-04 account_not_approved', () => pm.expect(r.error).to.equal('account_not_approved'));",
-            "pm.test('L-04 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-04 account_not_approved', () => pm.expect(r.error).to.equal('account_not_approved'));",
+                  "pm.test('L-04 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "L-05 Rejected user → account_rejected",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"eve\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"eve\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('L-05 account_rejected', () => pm.expect(r.error).to.equal('account_rejected'));",
-            "pm.test('L-05 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-05 account_rejected', () => pm.expect(r.error).to.equal('account_rejected'));",
+                  "pm.test('L-05 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "L-06 Login temporary session for logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"carol\",\"password\":\"{{seed_password}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-06 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('L-06 token issued', () => pm.expect(r.token).to.be.a('string'));",
+                  "if (r.token) pm.collectionVariables.set('logout_token', r.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "L-07 Logout temporary session",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{logout_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-07 logout ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('L-07 HTTP 200', () => pm.expect(pm.response.code).to.equal(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "L-08 Revoked temporary token rejected",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{logout_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('L-08 revoked token rejected', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('L-08 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "5. Approve / Reject",
       "item": [
         {
-          "name": "A-01 Approved user approves pending",
+          "name": "A-00 Admin token precondition via /me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-00 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('A-00 approved admin', () => pm.expect(r.user.role).to.equal('admin'));",
+                  "pm.test('A-00 canApprove true', () => pm.expect(r.canApprove).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A-01 Admin approves pending user",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/approve",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"userId\":\"{{dave_id}}\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"{{dave_id}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('A-01 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('A-01 status approved', () => pm.expect(r.user.status).to.equal('approved'));",
-            "pm.test('A-01 cred > 0', () => pm.expect(Number(r.user.cred)).to.be.above(0));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('A-01 status approved', () => pm.expect(r.user.status).to.equal('approved'));",
+                  "pm.test('A-01 cred > 0', () => pm.expect(Number(r.user.cred)).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A-02 Admin sees pending approval queue",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users?status=pending",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-02 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('A-02 pending is array', () => pm.expect(r.pending).to.be.an('array'));",
+                  "pm.test('A-02 pending users have pending status', () => r.pending.forEach((u) => pm.expect(u.status).to.equal('pending')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A-03 Non-admin approve -> admin_only",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/approve",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"{{reject_user_id}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-03 admin_only', () => pm.expect(r.error).to.equal('admin_only'));",
+                  "pm.test('A-03 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "A-04 No JWT → unauthorized",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/approve",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"userId\":\"{{dave_id}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"{{dave_id}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('A-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('A-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('A-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "A-05 Non-existent user → target_not_found",
+          "name": "A-05 Non-existent user -> user_not_found",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/approve",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"userId\":\"00000000-0000-0000-0000-999999999999\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"00000000-0000-0000-0000-999999999999\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('A-05 target_not_found', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('A-05 HTTP 404', () => pm.expect(pm.response.code).to.equal(404));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-05 user_not_found', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('A-05 error', () => pm.expect(r.error).to.equal('user_not_found'));",
+                  "pm.test('A-05 HTTP 404', () => pm.expect(pm.response.code).to.equal(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A-08 Non-admin reject -> admin_only",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/reject",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"{{reject_user_id}}\",\"deviceFingerprint\":\"postman-non-admin-reject\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-08 admin_only', () => pm.expect(r.error).to.equal('admin_only'));",
+                  "pm.test('A-08 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "A-09 Reject with fingerprint → device blocked",
@@ -535,22 +1384,41 @@
             "method": "POST",
             "url": "{{base_url}}/reject",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"userId\":\"{{grace_id}}\",\"deviceFingerprint\":\"aabbcc112233445566778899aabbccddeeff0011\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"{{reject_user_id}}\",\"deviceFingerprint\":\"aabbcc112233445566778899aabbccddeeff0011\"}"
+            }
           },
-          "variable": [{ "key": "grace_id", "value": "00000000-0000-0000-0000-000000000007" }],
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('A-09 ok or cross-school', () => {",
-            "  pm.expect(r.ok === true || r.error !== undefined).to.be.true;",
-            "});"
-          ]}}]
+          "variable": [
+            {
+              "key": "grace_id",
+              "value": "00000000-0000-0000-0000-000000000007"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('A-09 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('A-09 status rejected', () => pm.expect(r.user.status).to.equal('rejected'));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "6. Messages",
       "item": [
@@ -560,19 +1428,35 @@
             "method": "POST",
             "url": "{{base_url}}/messages",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"Привет из Postman!\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"Привет из Postman!\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('M-01 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('M-01 message.fromId is alice', () => pm.expect(r.message.fromId).to.equal(pm.collectionVariables.get('alice_id')));",
-            "pm.test('M-01 message.toId is bob', () => pm.expect(r.message.toId).to.equal(pm.collectionVariables.get('bob_id')));",
-            "pm.test('M-01 readAt is null', () => pm.expect(r.message.readAt).to.be.null);",
-            "pm.test('M-01 no fromId spoofing', () => pm.expect(r.message.fromId).not.to.equal(pm.collectionVariables.get('bob_id')));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('M-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('M-01 message.fromId is alice', () => pm.expect(r.message.fromId).to.equal(pm.collectionVariables.get('alice_id')));",
+                  "pm.test('M-01 message.toId is bob', () => pm.expect(r.message.toId).to.equal(pm.collectionVariables.get('bob_id')));",
+                  "pm.test('M-01 readAt is null', () => pm.expect(r.message.readAt).to.be.null);",
+                  "pm.test('M-01 no fromId spoofing', () => pm.expect(r.message.fromId).not.to.equal(pm.collectionVariables.get('bob_id')));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "M-02 Get messages alice↔bob",
@@ -580,30 +1464,47 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/messages?partnerId={{bob_id}}",
-              "query": [{ "key": "partnerId", "value": "{{bob_id}}" }]
+              "query": [
+                {
+                  "key": "partnerId",
+                  "value": "{{bob_id}}"
+                }
+              ]
             },
-            "header": [{ "key": "Authorization", "value": "Bearer {{alice_token}}" }]
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('M-02 ok', () => pm.expect(r.ok).to.be.true);",
-            "pm.test('M-02 messages is array', () => pm.expect(r.messages).to.be.an('array'));",
-            "pm.test('M-02 messages not empty', () => pm.expect(r.messages.length).to.be.above(0));",
-            "pm.test('M-02 each message has fromId/toId', () => {",
-            "  r.messages.forEach(m => {",
-            "    const aliceId = pm.collectionVariables.get('alice_id');",
-            "    const bobId = pm.collectionVariables.get('bob_id');",
-            "    pm.expect([m.fromId, m.toId]).to.include(aliceId);",
-            "    pm.expect([m.fromId, m.toId]).to.include(bobId);",
-            "  });",
-            "});",
-            "pm.test('M-02 sorted ascending', () => {",
-            "  const msgs = r.messages;",
-            "  for (let i = 1; i < msgs.length; i++) {",
-            "    pm.expect(new Date(msgs[i].time) >= new Date(msgs[i-1].time)).to.be.true;",
-            "  }",
-            "});"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('M-02 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('M-02 messages is array', () => pm.expect(r.messages).to.be.an('array'));",
+                  "pm.test('M-02 messages not empty', () => pm.expect(r.messages.length).to.be.above(0));",
+                  "pm.test('M-02 each message has fromId/toId', () => {",
+                  "  r.messages.forEach(m => {",
+                  "    const aliceId = pm.collectionVariables.get('alice_id');",
+                  "    const bobId = pm.collectionVariables.get('bob_id');",
+                  "    pm.expect([m.fromId, m.toId]).to.include(aliceId);",
+                  "    pm.expect([m.fromId, m.toId]).to.include(bobId);",
+                  "  });",
+                  "});",
+                  "pm.test('M-02 sorted ascending', () => {",
+                  "  const msgs = r.messages;",
+                  "  for (let i = 1; i < msgs.length; i++) {",
+                  "    pm.expect(new Date(msgs[i].time) >= new Date(msgs[i-1].time)).to.be.true;",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "M-03 Empty text → text_required",
@@ -611,29 +1512,60 @@
             "method": "POST",
             "url": "{{base_url}}/messages",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('M-03 text_required', () => pm.expect(r.error).to.equal('text_required'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('M-03 text_required', () => pm.expect(r.error).to.equal('text_required'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "M-04 No JWT → unauthorized",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/messages",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"Hi\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"text\":\"Hi\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('M-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('M-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('M-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('M-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "M-07 Cross-school message → cross_school_forbidden",
@@ -641,19 +1573,34 @@
             "method": "POST",
             "url": "{{base_url}}/messages",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{frank_id}}\",\"text\":\"Hello from other school\"}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{frank_id}}\",\"text\":\"Hello from other school\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('M-07 cross_school_forbidden', () => pm.expect(r.ok).to.be.false);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('M-07 cross_school_forbidden', () => pm.expect(r.ok).to.be.false);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "7. Credo Rating",
       "item": [
@@ -663,21 +1610,37 @@
             "method": "POST",
             "url": "{{base_url}}/rate",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":4}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"score\":4}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-01 ok or 24h_limit (seed may have existing rating)', () => {",
-            "  pm.expect(r.ok === true || r.error === '24h_limit').to.be.true;",
-            "});",
-            "if (r.ok) {",
-            "  pm.test('C-01 newCred is number', () => pm.expect(r.newCred).to.be.a('number'));",
-            "  pm.test('C-01 entry.score is 4', () => pm.expect(r.entry.score).to.equal(4));",
-            "}"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-01 ok or 24h_limit (seed may have existing rating)', () => {",
+                  "  pm.expect(r.ok === true || r.error === '24h_limit').to.be.true;",
+                  "});",
+                  "if (r.ok) {",
+                  "  pm.test('C-01 newCred is number', () => pm.expect(r.newCred).to.be.a('number'));",
+                  "  pm.test('C-01 entry.score is 4', () => pm.expect(r.entry.score).to.equal(4));",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "C-02 Self-rate → self",
@@ -685,16 +1648,32 @@
             "method": "POST",
             "url": "{{base_url}}/rate",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{alice_id}}\",\"score\":5}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{alice_id}}\",\"score\":5}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-02 self', () => pm.expect(r.error).to.equal('self'));",
-            "pm.test('C-02 HTTP 400', () => pm.expect(pm.response.code).to.equal(400));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-02 self', () => pm.expect(r.error).to.equal('self'));",
+                  "pm.test('C-02 HTTP 400', () => pm.expect(pm.response.code).to.equal(400));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "C-05 Score 0 → invalid_score",
@@ -702,15 +1681,31 @@
             "method": "POST",
             "url": "{{base_url}}/rate",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":0}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"score\":0}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-05 invalid_score', () => pm.expect(r.error).to.equal('invalid_score'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-05 invalid_score', () => pm.expect(r.error).to.equal('invalid_score'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "C-06 Score 6 → invalid_score",
@@ -718,15 +1713,31 @@
             "method": "POST",
             "url": "{{base_url}}/rate",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":6}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"score\":6}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-06 invalid_score', () => pm.expect(r.error).to.equal('invalid_score'));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-06 invalid_score', () => pm.expect(r.error).to.equal('invalid_score'));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "C-08 fromUserId mismatch → fromUserId_mismatch",
@@ -734,16 +1745,32 @@
             "method": "POST",
             "url": "{{base_url}}/rate",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"fromUserId\":\"{{bob_id}}\",\"toId\":\"{{carol_id}}\",\"score\":5}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fromUserId\":\"{{bob_id}}\",\"toId\":\"{{carol_id}}\",\"score\":5}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-08 fromUserId_mismatch', () => pm.expect(r.error).to.equal('fromUserId_mismatch'));",
-            "pm.test('C-08 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-08 fromUserId_mismatch', () => pm.expect(r.error).to.equal('fromUserId_mismatch'));",
+                  "pm.test('C-08 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "C-09 Cross-school → cross_school_forbidden",
@@ -751,37 +1778,1445 @@
             "method": "POST",
             "url": "{{base_url}}/rate",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{alice_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{frank_id}}\",\"score\":5}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{frank_id}}\",\"score\":5}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-09 cross_school or no_chat', () => {",
-            "  pm.expect(['cross_school_forbidden','no_chat']).to.include(r.error);",
-            "});"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-09 cross_school or no_chat', () => {",
+                  "  pm.expect(['cross_school_forbidden','no_chat']).to.include(r.error);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "C-12 No JWT → unauthorized",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/rate",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"toId\":\"{{bob_id}}\",\"score\":4}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{bob_id}}\",\"score\":4}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('C-12 unauthorized', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('C-12 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('C-12 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('C-12 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
-      "name": "8. Security",
+      "name": "8. Groups",
+      "description": "Groups, invite accept/decline, private visibility, school-public groups, and group messages through Edge Functions.",
+      "item": [
+        {
+          "name": "G-01 List groups includes school-public group",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-01 groups array', () => pm.expect(r.groups).to.be.an('array'));",
+                  "pm.test('G-01 invites array', () => pm.expect(r.invites).to.be.an('array'));",
+                  "const publicGroup = r.groups.find((g) => g.type === 'school_public');",
+                  "pm.test('G-01 has school-public group', () => pm.expect(publicGroup).to.exist);",
+                  "if (publicGroup) pm.collectionVariables.set('school_public_group_id', publicGroup.id);",
+                  "pm.test('G-01 group members are embedded when present', () => {",
+                  "  r.groups.forEach((g) => pm.expect(g.members).to.be.an('array'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-02 Create private group and invite bob/carol",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"create\",\"name\":\"Postman Group {{$timestamp}}\",\"memberIds\":[\"{{bob_id}}\",\"{{carol_id}}\"]}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-02 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-02 private group', () => pm.expect(r.group.type).to.equal('private'));",
+                  "pm.test('G-02 created by alice', () => pm.expect(r.group.createdBy).to.equal(pm.collectionVariables.get('alice_id')));",
+                  "if (r.group) {",
+                  "  pm.collectionVariables.set('group_id', r.group.id);",
+                  "  pm.collectionVariables.set('group_name', r.group.name);",
+                  "} "
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-03 Alice lists new private group with members",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const group = r.groups.find((g) => g.id === groupId);",
+                  "pm.test('G-03 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-03 group visible to creator', () => pm.expect(group).to.exist);",
+                  "pm.test('G-03 creator can manage', () => pm.expect(group.canManage).to.be.true);",
+                  "pm.test('G-03 memberCount >= 1', () => pm.expect(group.memberCount).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-04 Bob sees pending invite",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const invite = r.invites.find((item) => item.group && item.group.id === groupId);",
+                  "pm.test('G-04 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-04 invite visible to bob', () => pm.expect(invite).to.exist);",
+                  "if (invite) pm.collectionVariables.set('bob_invite_id', invite.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-05 Bob accepts invite",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"respond_invite\",\"inviteId\":\"{{bob_invite_id}}\",\"decision\":\"accept\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-05 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-05 decision accept', () => pm.expect(r.decision).to.equal('accept'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-06 Bob sees private group as member",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const group = r.groups.find((g) => g.id === groupId);",
+                  "pm.test('G-06 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-06 group visible to accepted member', () => pm.expect(group).to.exist);",
+                  "pm.test('G-06 bob role member', () => pm.expect(group.myRole).to.equal('member'));",
+                  "pm.test('G-06 memberCount includes alice and bob', () => pm.expect(group.memberCount).to.be.at.least(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-07 Carol sees pending invite",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{carol_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const invite = r.invites.find((item) => item.group && item.group.id === groupId);",
+                  "pm.test('G-07 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-07 invite visible to carol', () => pm.expect(invite).to.exist);",
+                  "if (invite) pm.collectionVariables.set('carol_invite_id', invite.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-08 Carol declines invite",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{carol_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"respond_invite\",\"inviteId\":\"{{carol_invite_id}}\",\"decision\":\"decline\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-08 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-08 decision decline', () => pm.expect(r.decision).to.equal('decline'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-09 Declined private group hidden from carol",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{carol_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "pm.test('G-09 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-09 private group not visible after decline', () => pm.expect(r.groups.some((g) => g.id === groupId)).to.be.false);",
+                  "pm.test('G-09 invite no longer pending', () => pm.expect(r.invites.some((item) => item.group && item.group.id === groupId)).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-10 Bob sends group message",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"groupId\":\"{{group_id}}\",\"text\":\"Group hello from Postman\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-10 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-10 message groupId', () => pm.expect(r.message.groupId).to.equal(pm.collectionVariables.get('group_id')));",
+                  "if (r.message && r.message.id) pm.collectionVariables.set('group_message_id', r.message.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-11 Alice fetches group messages",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/messages?groupId={{group_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const messageId = pm.collectionVariables.get('group_message_id');",
+                  "pm.test('G-11 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('G-11 messages array', () => pm.expect(r.messages).to.be.an('array'));",
+                  "pm.test('G-11 group message found', () => pm.expect(r.messages.some((m) => m.id === messageId)).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-12 No JWT cannot list groups",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/groups",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-12 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('G-12 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G-13 Unsupported group action",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/groups",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"unknown\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('G-13 unsupported_action', () => pm.expect(r.error).to.equal('unsupported_action'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9. Media Upload",
+      "description": "Manual media checks. MU-01 requires a small image file selected in Postman; no build step or CI is required.",
+      "item": [
+        {
+          "name": "MU-01 Upload image file (manual file selection)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/upload-media",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{media_file_path}}"
+                },
+                {
+                  "key": "width",
+                  "value": "{{media_width}}",
+                  "type": "text"
+                },
+                {
+                  "key": "height",
+                  "value": "{{media_height}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('MU-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('MU-01 media path', () => pm.expect(r.media.path).to.be.a('string'));",
+                  "pm.test('MU-01 media mime image', () => pm.expect(r.media.mime).to.match(/^image\\//));",
+                  "if (r.media) {",
+                  "  pm.collectionVariables.set('media_path', r.media.path);",
+                  "  pm.collectionVariables.set('media_mime', r.media.mime);",
+                  "  pm.collectionVariables.set('media_bytes', String(r.media.bytes || 1));",
+                  "  pm.collectionVariables.set('media_width', String(r.media.width || 1));",
+                  "  pm.collectionVariables.set('media_height', String(r.media.height || 1));",
+                  "} "
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MU-02 Send group image message using uploaded media",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"groupId\":\"{{group_id}}\",\"text\":\"Image from Postman\",\"attachmentPath\":\"{{media_path}}\",\"attachmentMime\":\"{{media_mime}}\",\"attachmentBytes\":{{media_bytes}},\"attachmentWidth\":{{media_width}},\"attachmentHeight\":{{media_height}}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('MU-02 media_path captured first', () => pm.expect(pm.collectionVariables.get('media_path')).to.be.a('string').and.not.empty);",
+                  "pm.test('MU-02 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('MU-02 message type image', () => pm.expect(r.message.type).to.equal('image'));",
+                  "pm.test('MU-02 attachment path kept', () => pm.expect(r.message.attachmentPath).to.equal(pm.collectionVariables.get('media_path')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MU-03 Fetch group messages with signed attachment URL",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/messages?groupId={{group_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const mediaPath = pm.collectionVariables.get('media_path');",
+                  "const imageMessage = r.messages.find((m) => m.attachmentPath === mediaPath);",
+                  "pm.test('MU-03 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('MU-03 image message found', () => pm.expect(imageMessage).to.exist);",
+                  "pm.test('MU-03 signed attachment URL present when storage signs successfully', () => pm.expect(imageMessage.attachmentUrl === null || typeof imageMessage.attachmentUrl === 'string').to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MU-04 No JWT -> unauthorized",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/upload-media",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{media_file_path}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('MU-04 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('MU-04 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MU-05 Missing file -> file_required",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/upload-media",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "width",
+                  "value": "1",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('MU-05 file_required', () => pm.expect(r.error).to.equal('file_required'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10. Safety Reports / Blocks",
+      "description": "User report and block flows through Edge Functions. These prove service_role Edge Functions remain the write path for the safety subsystem.",
+      "item": [
+        {
+          "name": "SB-01 Bob reports Alice",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/report-user",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"targetId\":\"{{alice_id}}\",\"reason\":\"spam\",\"details\":\"Postman safety report smoke test\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('SB-01 report open', () => pm.expect(r.report.status).to.equal('open'));",
+                  "pm.test('SB-01 reporter is bob', () => pm.expect(r.report.reporterId).to.equal(pm.collectionVariables.get('bob_id')));",
+                  "if (r.report) pm.collectionVariables.set('report_id', r.report.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-02 Bob cannot list admin reports",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/reports-admin?status=open",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-02 rejected', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('SB-02 admin only', () => pm.expect(r.error).to.equal('admin_only'));",
+                  "pm.test('SB-02 status 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-03 Admin lists open reports",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/reports-admin?status=open",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const reportId = pm.collectionVariables.get('report_id');",
+                  "pm.test('SB-03 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('SB-03 reports array', () => pm.expect(r.reports).to.be.an('array'));",
+                  "pm.test('SB-03 includes captured report', () => pm.expect(r.reports.some((report) => report.id === reportId)).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-04 Admin closes report",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/reports-admin",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reportId\":\"{{report_id}}\",\"action\":\"dismiss\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-04 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('SB-04 report dismissed', () => pm.expect(r.report.status).to.equal('dismissed'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-05 Bob blocks Alice",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/block-user",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"targetId\":\"{{alice_id}}\",\"action\":\"block\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-05 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('SB-05 block captured', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.collectionVariables.get('alice_id'))).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-06 Bob lists blocked users",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/block-user",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-06 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('SB-06 has alice block', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.collectionVariables.get('alice_id'))).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-07 Blocked direct message is denied",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/messages",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"toId\":\"{{alice_id}}\",\"text\":\"This should be blocked\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-07 rejected', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('SB-07 user_blocked', () => pm.expect(r.error).to.equal('user_blocked'));",
+                  "pm.test('SB-07 status 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-08 Bob unblocks Alice",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/block-user",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"targetId\":\"{{alice_id}}\",\"action\":\"unblock\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-08 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('SB-08 alice removed', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.collectionVariables.get('alice_id'))).to.be.false);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11. Admin Stats",
+      "description": "Admin tab backend aggregates. Requires approved admin token.",
+      "item": [
+        {
+          "name": "AD-00 Admin token precondition via /me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('AD-00 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('AD-00 approved admin', () => pm.expect(r.user.role).to.equal('admin'));",
+                  "pm.test('AD-00 canApprove true', () => pm.expect(r.canApprove).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "AD-01 Admin stats summary/charts/groups",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin-stats",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('AD-01 ok', () => pm.expect(r.ok).to.be.true);",
+                  "pm.test('AD-01 summary exists', () => pm.expect(r.summary).to.be.an('object'));",
+                  "pm.test('AD-01 group counters exist', () => {",
+                  "  pm.expect(r.summary).to.have.property('totalGroups');",
+                  "  pm.expect(r.summary).to.have.property('publicGroups');",
+                  "  pm.expect(r.summary).to.have.property('privateGroups');",
+                  "  pm.expect(r.summary).to.have.property('pendingInvites');",
+                  "});",
+                  "pm.test('AD-01 charts exist', () => pm.expect(r.charts).to.be.an('object'));",
+                  "pm.test('AD-01 groups array', () => pm.expect(r.groups).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "AD-02 Member cannot read admin stats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin-stats",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('AD-02 admin_only', () => pm.expect(r.error).to.equal('admin_only'));",
+                  "pm.test('AD-02 HTTP 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "AD-03 No JWT cannot read admin stats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin-stats",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('AD-03 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('AD-03 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12. Group and Safety Table Security (PostgREST negative)",
+      "description": "Direct PostgREST access must be blocked for group and safety tables. Successful writes should go through Edge Functions using service_role.",
+      "item": [
+        {
+          "name": "GT-01 anon cannot SELECT chat_groups",
+          "request": {
+            "method": "GET",
+            "url": "{{supabase_url}}/rest/v1/chat_groups?select=*&limit=1",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_anon_key}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('GT-01 anon SELECT chat_groups denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-01 anon SELECT chat_groups is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-02 anon cannot INSERT chat_groups",
+          "request": {
+            "method": "POST",
+            "url": "{{supabase_url}}/rest/v1/chat_groups",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_anon_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"forbidden anon insert\",\"school\":\"Postman\",\"type\":\"private\",\"createdBy\":\"{{alice_id}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('GT-02 anon INSERT chat_groups denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-02 anon INSERT chat_groups is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-03 anon cannot UPDATE group_members",
+          "request": {
+            "method": "PATCH",
+            "url": "{{supabase_url}}/rest/v1/group_members?groupId=eq.{{group_id}}&userId=eq.{{bob_id}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_anon_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"role\":\"admin\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('GT-03 anon UPDATE group_members denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-03 anon UPDATE group_members is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-04 anon cannot DELETE group_invites",
+          "request": {
+            "method": "DELETE",
+            "url": "{{supabase_url}}/rest/v1/group_invites?id=eq.{{bob_invite_id}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_anon_key}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('GT-04 anon DELETE group_invites denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-04 anon DELETE group_invites is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-05 authenticated cannot SELECT group_members",
+          "request": {
+            "method": "GET",
+            "url": "{{supabase_url}}/rest/v1/group_members?select=*&limit=1",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('GT-05 authenticated SELECT group_members denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-05 authenticated SELECT group_members is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-06 authenticated cannot INSERT group_invites",
+          "request": {
+            "method": "POST",
+            "url": "{{supabase_url}}/rest/v1/group_invites",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"groupId\":\"{{group_id}}\",\"invitedUserId\":\"{{carol_id}}\",\"invitedBy\":\"{{alice_id}}\",\"status\":\"pending\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('GT-06 authenticated INSERT group_invites denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-06 authenticated INSERT group_invites is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-07 authenticated cannot UPDATE chat_groups",
+          "request": {
+            "method": "PATCH",
+            "url": "{{supabase_url}}/rest/v1/chat_groups?id=eq.{{group_id}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"forbidden authenticated patch\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('GT-07 authenticated UPDATE chat_groups denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-07 authenticated UPDATE chat_groups is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-08 authenticated cannot DELETE chat_groups",
+          "request": {
+            "method": "DELETE",
+            "url": "{{supabase_url}}/rest/v1/chat_groups?id=eq.{{group_id}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const supabaseUrl = pm.variables.get('supabase_url');",
+                  "const anonKey = pm.variables.get('supabase_anon_key');",
+                  "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
+                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('GT-08 authenticated DELETE chat_groups denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-08 authenticated DELETE chat_groups is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-09 anon cannot SELECT user_reports",
+          "request": {
+            "method": "GET",
+            "url": "{{supabase_url}}/rest/v1/user_reports?select=*&limit=1",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_anon_key}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('GT-09 anon SELECT user_reports denied', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-09 not successful', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-10 anon cannot INSERT user_reports",
+          "request": {
+            "method": "POST",
+            "url": "{{supabase_url}}/rest/v1/user_reports",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supabase_anon_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reporterId\":\"{{bob_id}}\",\"targetId\":\"{{alice_id}}\",\"reason\":\"spam\",\"details\":\"forbidden direct insert\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('GT-10 anon INSERT user_reports denied', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-10 not successful', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-11 authenticated cannot SELECT user_blocks",
+          "request": {
+            "method": "GET",
+            "url": "{{supabase_url}}/rest/v1/user_blocks?select=*&limit=1",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('GT-11 authenticated SELECT user_blocks denied', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-11 not successful', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GT-12 authenticated cannot INSERT user_blocks",
+          "request": {
+            "method": "POST",
+            "url": "{{supabase_url}}/rest/v1/user_blocks",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"blockerId\":\"{{bob_id}}\",\"blockedId\":\"{{alice_id}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('GT-12 authenticated INSERT user_blocks denied', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
+                  "pm.test('GT-12 not successful', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13. Security",
       "item": [
         {
           "name": "S-01 No auth header → 401",
@@ -790,56 +3225,99 @@
             "url": "{{base_url}}/users",
             "header": []
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('S-01 unauthorized', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('S-01 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('S-01 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('S-01 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "S-03 Malformed JWT → 401",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/users",
-            "header": [{ "key": "Authorization", "value": "Bearer thisisnot.a.jwttoken" }]
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer thisisnot.a.jwttoken"
+              }
+            ]
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('S-03 unauthorized', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('S-03 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('S-03 unauthorized', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('S-03 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "S-05 Expired JWT → 401",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/users",
-            "header": [{
-              "key": "Authorization",
-              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiZXhwIjoxNjAwMDAwMDAwfQ.EXPIRED_SIGNATURE"
-            }]
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiZXhwIjoxNjAwMDAwMDAwfQ.EXPIRED_SIGNATURE"
+              }
+            ]
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('S-05 unauthorized (expired token)', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('S-05 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('S-05 unauthorized (expired token)', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('S-05 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "S-06 Logout revokes token",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/logout",
-            "header": [{ "key": "Authorization", "value": "Bearer {{alice_token}}" }]
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ]
           },
           "event": [
-            { "listen": "test", "script": { "exec": [
-              "const r = pm.response.json();",
-              "pm.test('S-06 logout ok', () => pm.expect(r.ok).to.be.true);"
-            ]}},
-            { "listen": "prerequest", "script": { "exec": [
-              "pm.collectionVariables.set('revoked_token', pm.collectionVariables.get('alice_token'));"
-            ]}}
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('S-06 logout ok', () => pm.expect(r.ok).to.be.true);"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('revoked_token', pm.collectionVariables.get('alice_token'));"
+                ]
+              }
+            }
           ]
         },
         {
@@ -847,29 +3325,61 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/users",
-            "header": [{ "key": "Authorization", "value": "Bearer {{revoked_token}}" }]
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{revoked_token}}"
+              }
+            ]
           },
-          "variable": [{ "key": "revoked_token", "value": "" }],
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('S-06b revoked token rejected', () => pm.expect(r.ok).to.be.false);",
-            "pm.test('S-06b HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
-          ]}}]
+          "variable": [
+            {
+              "key": "revoked_token",
+              "value": ""
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('S-06b revoked token rejected', () => pm.expect(r.ok).to.be.false);",
+                  "pm.test('S-06b HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "S-15 passwordHash not in login response",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}"
+            }
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const r = pm.response.json();",
-            "pm.test('S-15 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
-            "pm.test('S-15 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
-            "pm.test('S-15 no phoneVerified in response', () => pm.expect(r.user.phoneVerified).to.be.undefined);"
-          ]}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('S-15 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
+                  "pm.test('S-15 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
+                  "pm.test('S-15 no phoneVerified in response', () => pm.expect(r.user.phoneVerified).to.be.undefined);"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

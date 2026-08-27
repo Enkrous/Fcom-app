@@ -111,5 +111,19 @@ export async function requireAuthWithRevocation(
 
   if (!session) throw new Error('session_revoked');
 
-  return payload;
+  const { data: user } = await supabase
+    .from('users')
+    .select('nickname, status, school, role')
+    .eq('id', payload.sub)
+    .maybeSingle();
+
+  if (!user) throw new Error('user_not_found');
+
+  return {
+    ...payload,
+    nickname: user.nickname ?? payload.nickname,
+    status: user.status ?? payload.status,
+    school: user.school ?? payload.school,
+    role: user.role ?? payload.role,
+  };
 }

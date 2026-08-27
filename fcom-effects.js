@@ -4,9 +4,31 @@
   function initLoader() {
     const loader = document.getElementById('loader');
     if (!loader) return;
-    window.setTimeout(() => {
+    let hidden = false;
+    const hide = () => {
+      if (hidden) return;
+      hidden = true;
       loader.classList.add('is-hidden');
-    }, 700);
+    };
+
+    const container = document.getElementById('lottie-splash');
+    if (container && window.lottie && typeof window.lottie.loadAnimation === 'function') {
+      try {
+        const animation = window.lottie.loadAnimation({
+          container,
+          renderer: 'svg',
+          loop: false,
+          autoplay: true,
+          path: 'assets/splash.json',
+        });
+        animation.addEventListener('complete', hide);
+        animation.addEventListener('data_failed', hide);
+      } catch {
+        hide();
+      }
+    }
+
+    window.setTimeout(hide, 2100);
   }
 
   function initCursorGlow() {

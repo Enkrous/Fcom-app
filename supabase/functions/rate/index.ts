@@ -50,6 +50,7 @@ import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb }               from '../_shared/ratelimit.ts';
 import { isSameSchool }              from '../_shared/school.ts';
+import { hasUserBlock }              from '../_shared/blocks.ts';
 
 const SCORE_DELTA: Record<number, number> = { 1: -2, 2: -1, 3: 0, 4: 1, 5: 2 };
 const MAX_DAILY_CHANGE = 5;
@@ -111,6 +112,7 @@ Deno.serve(async (req: Request) => {
   if (rater.status  !== 'approved') return err('forbidden', 403);
   if (target.status !== 'approved') return err('target_not_approved', 403);
   if (!isSameSchool(rater.school, target.school)) return err('cross_school_forbidden', 403);
+  if (await hasUserBlock(supabase, fromId, toId!)) return err('user_blocked', 403);
 
   // canRate: conversation prerequisite
   const { data: convResult } = await supabase.rpc('had_conversation', {
