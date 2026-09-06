@@ -34,7 +34,8 @@ Never run `supabase/seed.sql` in production. It truncates/deletes data and inser
 - Browser writes go through Edge Functions, not direct PostgREST table writes.
 - `credo.js` remains localStorage-first.
 - Reports and user blocks are written through `report-user`, `block-user`, and `reports-admin`.
-- Onboarding/settings are static SPA flows backed by localStorage.
+- Onboarding/settings are static SPA flows backed by localStorage. Onboarding completion is keyed by user id; a one-time backfill marks accounts that existed before the onboarding feature as already seen.
+- Account deletion is available from Settings and removes the authenticated account through `delete-account`; it must never accept an arbitrary target user id.
 
 ## Postman Manual Run
 
@@ -80,12 +81,14 @@ Run folders in order:
 - School-public groups are created/synced through backend helpers.
 - Private groups are visible only to members, except admins can observe through the backend.
 - `POST /upload-media` accepts images only and returns `{ ok: true, media }`.
-- `POST /report-user` creates an open report for an approved same-school target.
+- `POST /report-user` creates an open report for an approved target, caps details at 1000 characters, and rejects a second open report for the same reporter/target pair.
+- `POST /report-user` accepts an optional `targetMessageId` only when that direct message belongs to the reporter/target conversation.
 - `GET /block-user` returns the current user's block list.
 - `POST /block-user` with `action: "block"` or `"unblock"` updates peer blocks.
 - Blocked direct messages and ratings return `{ ok: false, error: "user_blocked" }`.
 - `GET /reports-admin` and `POST /reports-admin` work only for approved admins.
 - `GET /admin-stats` works only for approved admins.
+- `POST /delete-account` deletes only the authenticated caller and revokes their sessions.
 
 ## Group And Safety Table Grants/RLS Regression
 
@@ -124,11 +127,12 @@ Expected result:
 ## Manual Frontend Smoke Checks
 
 - Landing loader: open `index.html`, confirm the landing iframe loads, the splash hides, and CTA still opens the app.
-- Onboarding happy path: clear `fcom_onboarding_seen_v1`, click register from landing, step through all onboarding cards, and confirm registration appears.
-- Onboarding negative path: click `Пропустить`; reload and confirm onboarding does not repeat.
+- Onboarding happy path: create a new approved account, complete all onboarding cards, and confirm the flow is shown only once for that account.
+- Onboarding negative path: click `Пропустить`; reload and confirm onboarding does not repeat and background sync does not reset the current step.
 - Settings happy path: log in as an approved user, open Profile -> Settings, toggle notifications, reload, and confirm the toggle persists.
 - Report happy path: open another user's profile, submit a report, and confirm Admin tab shows it for an admin.
 - Block happy path: block another user, confirm they disappear from direct member/chat lists and appear in Settings -> Blocked.
 - Block negative path: try to send a direct message to a blocked user; expected UI/server error is `user_blocked`.
+- Account deletion happy path: open Settings, confirm deletion, verify the account disappears locally, tokens are cleared, and a subsequent login returns `user_not_found`.
 
 No CI is configured for these checks. Keep this as a manual/portable test plan unless the repo later adds a package/runtime test harness.

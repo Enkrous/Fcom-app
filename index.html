@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="app-splash" class="loader app-splash" role="status" aria-live="polite" aria-label="Fcom загружается">
+    <div class="loader-stack app-splash-stack">
+      <div id="app-splash-animation" class="app-splash-animation" aria-hidden="true"></div>
+      <div class="loader-mark app-splash-wordmark" aria-hidden="true">F</div>
+      <p class="loader-kicker">Fcom Messenger</p>
+      <p class="loader-copy">Подключаем пространство доверия</p>
+    </div>
+  </div>
+
   <div id="landing-shell" class="landing-shell">
     <iframe
       id="landing-frame"
@@ -60,7 +69,7 @@
           <div id="onboarding-dots" class="onboarding-dots" aria-hidden="true"></div>
           <div class="onboarding-actions">
             <button id="onboarding-skip-btn" class="btn btn-outline" type="button">Пропустить</button>
-            <button id="onboarding-next-btn" class="btn btn-primary" type="button">Дальше</button>
+            <button id="onboarding-next-btn" class="btn btn-primary" type="button">Далее</button>
           </div>
         </div>
       </div>
@@ -232,7 +241,11 @@
           <h2>Заявка отправлена</h2>
           <p class="subtitle">Аккаунт <strong id="pending-nickname">@user</strong> ожидает одобрения.</p>
           <p class="hint">После одобрения вы сможете задать пароль и войти как в полноценный мессенджер.</p>
-          <button class="btn btn-outline" type="button" data-go-home>Вернуться на лендинг</button>
+          <p id="pending-sync-meta" class="hint hint-dev">Статус проверяется автоматически каждые несколько секунд.</p>
+          <div class="status-actions">
+            <button id="pending-refresh-btn" class="btn btn-outline" type="button">Проверить статус</button>
+            <button class="btn btn-outline" type="button" data-go-home>Вернуться на лендинг</button>
+          </div>
         </div>
       </div>
     </section>
@@ -376,6 +389,9 @@
                       <span>Own</span>
                     </div>
                   </div>
+                  <div class="user-profile-actions">
+                    <button id="open-settings-btn" class="btn btn-outline btn-small" type="button">Настройки</button>
+                  </div>
                 </div>
 
                 <div class="pane-shell">
@@ -458,41 +474,57 @@
 
     <section id="screen-settings" class="screen hidden">
       <div class="screen-shell">
-        <div class="settings-shell glass-panel">
-          <div class="pane-head">
-            <div>
-              <h3>Настройки</h3>
-              <p class="subtitle">Аккаунт, уведомления и список заблокированных участников.</p>
+        <div class="settings-grid">
+          <div class="pane-shell">
+            <div class="pane-head">
+              <div>
+                <h3>Настройки</h3>
+                <p class="subtitle">Аккаунт, уведомления и сессия на этом устройстве.</p>
+              </div>
+              <button id="settings-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
             </div>
-            <button id="settings-back-btn" class="btn btn-outline btn-small" type="button">Назад</button>
-          </div>
 
-          <div class="settings-profile">
-            <div id="settings-avatar"></div>
-            <div>
-              <h3 id="settings-name">Профиль</h3>
-              <p id="settings-meta" class="subtitle">@nickname · school · class</p>
-            </div>
-          </div>
-
-          <label class="settings-row">
-            <span>
-              <strong>Уведомления</strong>
-              <em>Локальная настройка для этого браузера.</em>
-            </span>
-            <input id="settings-notifications-toggle" type="checkbox" role="switch">
-          </label>
-
-          <div class="pane-head pane-head-split">
-            <div>
-              <h3>Заблокированные</h3>
-              <p class="subtitle">Эти участники скрыты из личных списков и не могут писать вам напрямую.</p>
+            <div class="user-profile-head">
+              <div id="settings-avatar"></div>
+              <div>
+                <h3 id="settings-fullname">Имя</h3>
+                <p id="settings-info" class="subtitle">@nickname · school · class</p>
+              </div>
             </div>
           </div>
-          <div id="settings-blocked-empty" class="search-empty-state">Список блокировок пуст.</div>
-          <div id="settings-blocked-list" class="card-list"></div>
 
-          <button id="settings-logout-btn" class="btn btn-outline btn-block" type="button">Выйти из аккаунта</button>
+          <div class="pane-shell">
+            <div class="pane-head">
+              <div>
+                <h3>Уведомления</h3>
+                <p class="subtitle">Хранится только на этом устройстве.</p>
+              </div>
+            </div>
+            <label class="group-member-option">
+              <input id="settings-notifications-toggle" type="checkbox" checked>
+              <span>Показывать уведомления о новых заявках на вступление</span>
+            </label>
+          </div>
+
+          <div class="pane-shell">
+            <div class="pane-head">
+              <div>
+                <h3>Сессия</h3>
+                <p class="subtitle">Управление входом в аккаунт на этом устройстве.</p>
+              </div>
+            </div>
+            <button id="settings-logout-btn" class="btn btn-danger btn-block" type="button">Выйти из аккаунта</button>
+          </div>
+
+          <div class="pane-shell settings-danger-zone">
+            <div class="pane-head">
+              <div>
+                <h3>Удаление аккаунта</h3>
+                <p class="subtitle">Удаляет профиль, сообщения, оценки, жалобы и серверные сессии без возможности восстановления.</p>
+              </div>
+            </div>
+            <button id="settings-delete-account-btn" class="btn btn-danger btn-block" type="button">Удалить аккаунт</button>
+          </div>
         </div>
       </div>
     </section>
@@ -632,6 +664,8 @@
   <script src="notifications.js"></script>
   <script src="credo.js"></script>
   <script src="api.js"></script>
+  <script src="vendor/lottie.min.js"></script>
+  <script src="splash.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

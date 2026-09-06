@@ -41,6 +41,7 @@ Current functions under `supabase/functions`:
 - `admin-stats` - GET admin dashboard stats; requires approved admin.
 - `approve` - POST approve a pending user; admin gated.
 - `block-user` - GET/POST current user's block list; writes via service_role.
+- `delete-account` - POST self-service permanent account deletion; removes the user and cascaded data.
 - `cleanup` - POST cleanup endpoint.
 - `groups` - GET group list/invites; POST create private group, respond to invite, or leave private group.
 - `login` - POST login and session creation.
@@ -87,10 +88,19 @@ Frontend group operations use `API.createGroup`, `API.respondGroupInvite`, `API.
 
 Migration `20260827120000_028_user_safety_reports_blocks.sql` adds:
 
-- `user_reports`: reports from an approved same-school user about another approved same-school user.
+- `user_reports`: reports from an approved user about another existing user; reporting is not restricted by school.
 - `user_blocks`: pairwise direct-contact blocks.
 
-Frontend safety operations use `API.reportUser`, `API.blockUser`, `API.unblockUser`, `API.listReports`, and `API.reviewReport`. Browser code does not write `user_reports` or `user_blocks` directly. Direct messages, rating, group invite creation, and invite acceptance check pairwise blocks through shared Edge Function helpers.
+Migration `20260828120000_029_reports_abuse_hardening.sql` adds the atomic
+one-open-report-per-reporter/target guard and the 1000-character details
+constraint. Migration `20260829120000_030_report_target_message.sql` adds the
+optional direct-message reference for message-specific reports.
+
+Frontend safety operations use `API.reportUser`, `API.blockUser`, `API.unblockUser`, `API.listReports`, and `API.reviewReport`. Browser code does not write `user_reports` or `user_blocks` directly. Reports use a fixed reason taxonomy, cap details at 1000 characters, reject duplicate open reports, and may reference a direct message between the reporter and target. Direct messages, rating, group invite creation, and invite acceptance check pairwise blocks through shared Edge Function helpers.
+
+The MVP block contract is direct-user messaging only. Group membership and group message visibility are not filtered by pairwise blocks; expanding block enforcement to groups requires an explicit product decision and a separate access-control design.
+
+Account deletion is self-service from Settings. `delete-account` authenticates only the caller's JWT, removes private chat media on a best-effort basis, deletes sessions, and relies on the existing `ON DELETE CASCADE` relationships for messages, ratings, reports, blocks, groups, invites, OTPs, and approval records. The browser then removes the current account's local cache and tokens.
 
 ## RLS And Grants
 
@@ -118,6 +128,8 @@ This is compatible with the current Edge Function architecture because Supabase 
 - `20260517170000_025_canonicalize_fiztekh_school.sql`
 - `20260826120000_027_harden_group_table_access.sql`
 - `20260827120000_028_user_safety_reports_blocks.sql`
+- `20260828120000_029_reports_abuse_hardening.sql`
+- `20260829120000_030_report_target_message.sql`
 
 `20260523120000_026_unify_all_users_into_fiztex.sql` may exist in a local worktree as a data-migration draft. Do not include it in production pushes unless the project explicitly decides to merge all schools into `Fiztex`.
 

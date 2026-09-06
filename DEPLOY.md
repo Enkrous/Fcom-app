@@ -45,6 +45,8 @@ Current files in `supabase/migrations`:
 - `20260517170000_025_canonicalize_fiztekh_school.sql`
 - `20260826120000_027_harden_group_table_access.sql`
 - `20260827120000_028_user_safety_reports_blocks.sql`
+- `20260828120000_029_reports_abuse_hardening.sql`
+- `20260829120000_030_report_target_message.sql`
 
 Do not deploy or repair `20260523120000_026_unify_all_users_into_fiztex.sql` unless the project explicitly decides to merge all production users into `Fiztex`. It is a data migration, not part of the current safe deployment path.
 
@@ -59,6 +61,7 @@ supabase functions deploy admin-stats
 supabase functions deploy approve
 supabase functions deploy block-user
 supabase functions deploy cleanup
+supabase functions deploy delete-account
 supabase functions deploy groups
 supabase functions deploy login
 supabase functions deploy logout
@@ -118,7 +121,9 @@ After deployment:
 - Send direct and group messages through `/messages`.
 - Upload an image through `/upload-media`, then send it through `/messages`.
 - Report a user through `/report-user`, then close the report through `/reports-admin` as admin.
+- Report a specific direct message with `targetMessageId` and confirm unrelated messages are rejected.
 - Block a user through `/block-user` and confirm direct `/messages` returns `user_blocked`; then unblock.
+- Delete a disposable test account through `/delete-account` and confirm its token is revoked and the user no longer exists.
 
 ## Adding Future Migrations
 

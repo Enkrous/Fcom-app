@@ -1,1 +1,4 @@
 .vercel
+.cursor/
+.tmp_fcom/
+supabase/.temp/

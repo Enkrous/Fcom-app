@@ -25,6 +25,7 @@ school messenger, private groups, student community, moderation, chat, reputatio
 - Users can report another approved same-school user.
 - Users can block/unblock direct peer contact.
 - Admins can review open reports in the Admin tab.
+- Users can permanently delete their account from Settings; server-side deletion cascades related application data.
 - `supabase/seed.sql` is local/dev only and must never be run against production.
 
 ## Native Gaps Before Submission

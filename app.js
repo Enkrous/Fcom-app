@@ -42,25 +42,25 @@ const App = (() => {
   let _pendingPhone   = '';  // phone waiting for OTP confirmation
   let _pendingChatImage = null;
   let _onboardingIndex = 0;
-  let _onboardingNextScreen = 'register';
+  let _pendingCheckInFlight = false;
   let _safetyTargetUserId = null;
   let _safetyMode = 'report';
 
   const ONBOARDING_STEPS = [
     {
-      kicker: 'Fcom',
-      title: 'Общайтесь внутри своей школы',
-      text: 'Профили, чаты и школьные группы открываются только после модерации аккаунта.',
+      kicker: 'Кредо',
+      title: 'Кредо — уровень доверия',
+      text: 'Ваш уровень доверия растёт по мере реального общения и оценок от участников школы.',
     },
     {
-      kicker: 'Credo',
-      title: 'Репутация растет от реальных взаимодействий',
-      text: 'Оценки доступны после диалога, а лимиты защищают рейтинг от накрутки.',
+      kicker: 'Чаты',
+      title: 'Чаты и группы',
+      text: 'Пишите одобренным участникам вашей школы и присоединяйтесь к группам по приглашению.',
     },
     {
-      kicker: 'Безопасность',
-      title: 'Жалобы и блокировки под рукой',
-      text: 'Можно пожаловаться на участника, заблокировать личные сообщения и снять блокировку в настройках.',
+      kicker: 'Сообщество',
+      title: 'Сообщество школы',
+      text: 'После одобрения вы сможете помогать модерировать заявки новых участников вашей школы.',
     },
   ];
 
@@ -189,12 +189,18 @@ const App = (() => {
       user_blocked: 'Личные действия с этим участником недоступны из-за блокировки.',
       cannot_report_self: 'Нельзя пожаловаться на свой профиль.',
       cannot_block_self: 'Нельзя заблокировать свой профиль.',
+      targetId_required: 'Не выбран участник.',
       invalid_reason: 'Выберите причину жалобы.',
+      report_already_open: 'Открытая жалоба на этого участника уже существует.',
+      report_already_pending: 'Открытая жалоба на этого участника уже существует.',
       details_too_long: 'Комментарий слишком длинный.',
       target_not_found: 'Участник не найден.',
+      target_message_invalid: 'Это сообщение нельзя прикрепить к жалобе.',
+      report_not_open: 'Эта жалоба уже обработана.',
       target_not_approved: 'Участник еще не одобрен.',
       cross_school_forbidden: 'Действие доступно только внутри вашей школы.',
       rate_limit_exceeded: 'Слишком много попыток. Попробуйте позже.',
+      report_failed: 'Не удалось отправить жалобу.',
       admin_only: 'Доступно только администратору.',
       forbidden: 'Недостаточно прав для этого действия.',
       network_error: 'Не удалось связаться с сервером.',
@@ -269,11 +275,13 @@ const App = (() => {
   }
 
   function _shouldShowOnboarding() {
-    return typeof Credo.hasSeenOnboarding === 'function' && !Credo.hasSeenOnboarding();
+    const userId = Credo.getCurrentUserId();
+    return Boolean(userId)
+      && typeof Credo.hasSeenOnboarding === 'function'
+      && !Credo.hasSeenOnboarding(userId);
   }
 
-  function openOnboarding(nextScreen = 'register') {
-    _onboardingNextScreen = nextScreen;
+  function openOnboarding() {
     _onboardingIndex = 0;
     renderOnboardingStep();
     showScreen('onboarding');
@@ -290,7 +298,7 @@ const App = (() => {
     if (kicker) kicker.textContent = step.kicker;
     if (title) title.textContent = step.title;
     if (text) text.textContent = step.text;
-    if (next) next.textContent = _onboardingIndex === ONBOARDING_STEPS.length - 1 ? 'Начать' : 'Дальше';
+    if (next) next.textContent = _onboardingIndex === ONBOARDING_STEPS.length - 1 ? 'Начать' : 'Далее';
     if (dots) {
       dots.innerHTML = ONBOARDING_STEPS.map((_, index) =>
         `<span class="onboarding-dot${index === _onboardingIndex ? ' is-active' : ''}" aria-hidden="true"></span>`,
@@ -299,10 +307,13 @@ const App = (() => {
   }
 
   function completeOnboarding() {
-    if (typeof Credo.setOnboardingSeen === 'function') {
+    const userId = Credo.getCurrentUserId();
+    if (typeof Credo.markOnboardingSeen === 'function') {
+      Credo.markOnboardingSeen(userId);
+    } else if (typeof Credo.setOnboardingSeen === 'function') {
       Credo.setOnboardingSeen(true);
     }
-    showScreen(_onboardingNextScreen);
+    route();
   }
 
   function handleOnboardingNext() {
@@ -316,6 +327,7 @@ const App = (() => {
 
   function renderPendingScreen(user) {
     $('#pending-nickname').textContent = `@${user.nickname}`;
+    _updatePendingSyncMeta();
     const card = screens.pending?.querySelector('.status-card');
     if (!card || card.querySelector('.status-steps')) return;
 
@@ -332,6 +344,53 @@ const App = (() => {
     else card.appendChild(steps);
   }
 
+  function _updatePendingSyncMeta(state) {
+    const meta = $('#pending-sync-meta');
+    if (!meta) return;
+
+    if (state === 'checking') {
+      meta.textContent = 'Проверяем статус...';
+      return;
+    }
+
+    if (state === 'error') {
+      meta.textContent = 'Не удалось проверить статус. Попробуйте ещё раз.';
+      return;
+    }
+
+    const time = new Date().toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    meta.textContent = _isBackendMode()
+      ? `Статус проверяется автоматически. Последняя проверка: ${time}.`
+      : 'Статус обновится сразу после одобрения администратором.';
+  }
+
+  async function handlePendingRefresh() {
+    if (_pendingCheckInFlight) return;
+    _pendingCheckInFlight = true;
+
+    const button = $('#pending-refresh-btn');
+    if (button) button.disabled = true;
+    _updatePendingSyncMeta('checking');
+
+    try {
+      if (_isBackendMode() && typeof API?.syncNow === 'function') {
+        const result = await API.syncNow();
+        if (!result?.ok) {
+          _updatePendingSyncMeta('error');
+          return;
+        }
+      }
+      route();
+    } finally {
+      _pendingCheckInFlight = false;
+      if (button) button.disabled = false;
+    }
+  }
+
   // --------------- Маршрутизация ---------------
 
   function route() {
@@ -345,10 +404,6 @@ const App = (() => {
     // Нет текущего пользователя — показать логин (или регистрацию если нет пользователей)
     if (!userId) {
       const users = _getLocalAccounts();
-      if (_appVisible && _shouldShowOnboarding()) {
-        openOnboarding(_isBackendMode() ? 'login' : (users.length === 0 ? 'register' : 'login'));
-        return;
-      }
       if (_isBackendMode()) {
         showScreen('login');
       } else if (users.length === 0) {
@@ -394,6 +449,12 @@ const App = (() => {
       return;
     }
 
+    // First active login only: onboarding belongs after approval and password setup.
+    if (_shouldShowOnboarding()) {
+      openOnboarding();
+      return;
+    }
+
     // Всё ок — главный экран
     showScreen('main');
     renderMainScreen(user);
@@ -415,11 +476,6 @@ const App = (() => {
         return;
       }
 
-      if (_shouldShowOnboarding()) {
-        openOnboarding('register');
-        return;
-      }
-
       showScreen('register');
       return;
     }
@@ -433,11 +489,6 @@ const App = (() => {
       const userId = Credo.getCurrentUserId();
       if (userId) {
         route();
-        return;
-      }
-
-      if (_shouldShowOnboarding()) {
-        openOnboarding('login');
         return;
       }
 
@@ -548,7 +599,7 @@ const App = (() => {
 
     // Обновить badges и проверить новые события
     _updateNavBadges(user);
-    if (_isAdmin(user) && typeof Notif !== 'undefined') {
+    if (_isAdmin(user) && typeof Notif !== 'undefined' && Credo.getNotificationsEnabled(user.id)) {
       Notif.checkAndNotify(user, () => showTab('users'));
     }
   }
@@ -964,92 +1015,43 @@ const App = (() => {
       historyEmptyId: 'rate-history-empty',
     });
 
-    const card = $('#tab-profile .profile-card');
-    if (!card) return;
-
-    let actions = $('#profile-actions');
-    if (!actions) {
-      actions = document.createElement('div');
-      actions.id = 'profile-actions';
-      actions.className = 'user-profile-actions';
-      card.appendChild(actions);
-    }
-
-    actions.innerHTML = '<button id="profile-settings-btn" class="btn btn-primary btn-small" type="button">Настройки</button>';
-    const button = $('#profile-settings-btn');
-    if (button) button.addEventListener('click', openSettingsScreen);
   }
 
-  function openSettingsScreen() {
-    const currentUser = Credo.getUserById(Credo.getCurrentUserId());
-    if (!currentUser) {
-      route();
-      return;
-    }
-    renderSettingsScreen(currentUser);
-    showScreen('settings');
-  }
+  // --------------- Экран настроек ---------------
 
   function renderSettingsScreen(user) {
     const avatar = $('#settings-avatar');
-    const name = $('#settings-name');
-    const meta = $('#settings-meta');
-    const toggle = $('#settings-notifications-toggle');
-    const blockedList = $('#settings-blocked-list');
-    const blockedEmpty = $('#settings-blocked-empty');
-
     if (avatar) {
       avatar.innerHTML = Avatar.html({
         seed: user.nickname,
         imageUrl: user.avatarUrl || '',
       });
     }
-    if (name) name.textContent = user.fullName || '@' + user.nickname;
-    if (meta) meta.textContent = `@${user.nickname} · ${user.school} · ${user.grade}`;
-    if (toggle) toggle.checked = Credo.getSetting('notificationsEnabled', true) !== false;
+    $('#settings-fullname').textContent = user.fullName;
+    $('#settings-info').textContent = `@${user.nickname} · ${user.school} · ${user.grade}`;
 
-    if (!blockedList || !blockedEmpty) return;
+    const notifToggle = $('#settings-notifications-toggle');
+    if (notifToggle) {
+      notifToggle.checked = Credo.getNotificationsEnabled(user.id);
+    }
+  }
 
-    const blocks = (Credo.getUserBlocks ? Credo.getUserBlocks() : [])
-      .filter((block) => block.blockerId === user.id);
+  function openSettings() {
+    const user = Credo.getUserById(Credo.getCurrentUserId());
+    if (!user) return;
+    renderSettingsScreen(user);
+    showScreen('settings');
+  }
 
-    if (blocks.length === 0) {
-      blockedList.innerHTML = '';
-      blockedEmpty.classList.remove('hidden');
+  function closeSettings() {
+    const me = Credo.getUserById(Credo.getCurrentUserId());
+    if (me) {
+      showScreen('main');
+      renderMainScreen(me);
+      showTab('profile');
       return;
     }
-
-    blockedEmpty.classList.add('hidden');
-    blockedList.innerHTML = blocks.map((block) => {
-      const blockedUser = block.user || Credo.getUserById(block.blockedId) || {};
-      const nickname = blockedUser.nickname || 'unknown';
-      const fullName = blockedUser.fullName || '';
-      return `
-        <div class="card">
-          ${Avatar.html({ seed: nickname, imageUrl: blockedUser.avatarUrl || '' })}
-          <div class="card-body">
-            <div class="card-name">@${escapeHtml(nickname)}</div>
-            <div class="card-sub">${escapeHtml(fullName || 'Заблокированный участник')}</div>
-          </div>
-          <div class="card-actions">
-            <button class="btn btn-outline btn-small" type="button" data-settings-unblock="${escapeAttr(block.blockedId)}">Разблокировать</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    blockedList.querySelectorAll('[data-settings-unblock]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const result = typeof API !== 'undefined' && typeof API.unblockUser === 'function'
-          ? await API.unblockUser(button.dataset.settingsUnblock)
-          : Credo.unblockUserLocal(user.id, button.dataset.settingsUnblock);
-        if (!result?.ok) {
-          alert(_safetyErrorMessage(result?.error));
-          return;
-        }
-        renderSettingsScreen(Credo.getUserById(user.id) || user);
-      });
-    });
+    route();
   }
 
   function _renderProfileContent({
@@ -1523,7 +1525,11 @@ const App = (() => {
 
     closeSafetyModal();
     if (completedMode === 'report') {
-      alert('Жалоба отправлена.');
+      if (typeof Notif !== 'undefined' && typeof Notif.showToast === 'function') {
+        Notif.showToast({ type: 'message', text: 'Жалоба отправлена.' });
+      } else {
+        alert('Жалоба отправлена.');
+      }
     }
 
     const currentUser = Credo.getUserById(Credo.getCurrentUserId());
@@ -1570,7 +1576,7 @@ const App = (() => {
       }
 
       const settingsBtn = actions.querySelector('[data-open-settings]');
-      if (settingsBtn) settingsBtn.addEventListener('click', openSettingsScreen);
+      if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
       return;
     }
 
@@ -2385,6 +2391,45 @@ const App = (() => {
     route();
   }
 
+  async function handleDeleteAccount() {
+    const user = Credo.getUserById(Credo.getCurrentUserId());
+    if (!user) return;
+
+    const confirmed = confirm(
+      'Удалить аккаунт без возможности восстановления? Все сообщения, оценки и данные профиля будут удалены.'
+    );
+    if (!confirmed) return;
+
+    const button = $('#settings-delete-account-btn');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Удаляем аккаунт...';
+    }
+
+    const result = typeof API !== 'undefined' && typeof API.deleteAccount === 'function'
+      ? await API.deleteAccount()
+      : (typeof Credo.removeUserLocal === 'function'
+        ? (Credo.removeUserLocal(user.id), { ok: true })
+        : { ok: false, error: 'not_supported' });
+
+    if (!result?.ok) {
+      const errors = {
+        network_error: 'Не удалось связаться с сервером. Попробуйте ещё раз.',
+        unauthorized: 'Сессия истекла. Войдите снова и повторите удаление.',
+        delete_failed: 'Сервер не смог удалить аккаунт. Попробуйте ещё раз.',
+      };
+      alert(errors[result?.error] || 'Не удалось удалить аккаунт.');
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Удалить аккаунт';
+      }
+      return;
+    }
+
+    _resetUIState();
+    route();
+  }
+
   async function handleDemoReset() {
     if (!confirm('Сбросить ВСЕ данные?')) return;
     if (typeof API !== 'undefined' && typeof API.logout === 'function') {
@@ -2438,6 +2483,9 @@ const App = (() => {
       route();
       return;
     }
+
+    // A background sync must not restart the current onboarding step.
+    if (_currentScreen === 'onboarding') return;
 
     if (_currentScreen === 'chat') {
       if (currentChatPartner) {
@@ -2520,6 +2568,9 @@ const App = (() => {
   // --------------- Инициализация ---------------
 
   function init() {
+    if (typeof Splash !== 'undefined' && typeof Splash.start === 'function') {
+      Splash.start();
+    }
     setAppVisible(false);
 
     // Регистрация
@@ -2534,6 +2585,10 @@ const App = (() => {
       e.preventDefault();
       handleResendOtp();
     });
+
+    // Ручная проверка статуса модерации
+    const pendingRefreshBtn = $('#pending-refresh-btn');
+    if (pendingRefreshBtn) pendingRefreshBtn.addEventListener('click', handlePendingRefresh);
 
     // Создание пароля
     $('#setpass-btn').addEventListener('click', handleSetPassword);
@@ -2558,23 +2613,19 @@ const App = (() => {
     const onboardingSkip = $('#onboarding-skip-btn');
     if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
 
-    const profileSettingsBtn = $('#profile-settings-btn');
-    if (profileSettingsBtn) profileSettingsBtn.addEventListener('click', openSettingsScreen);
+    const openSettingsBtn = $('#open-settings-btn');
+    if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettings);
     const settingsBackBtn = $('#settings-back-btn');
-    if (settingsBackBtn) {
-      settingsBackBtn.addEventListener('click', () => {
-        const user = Credo.getUserById(Credo.getCurrentUserId());
-        showScreen('main');
-        if (user) renderMainScreen(user);
-        showTab('profile');
-      });
-    }
+    if (settingsBackBtn) settingsBackBtn.addEventListener('click', closeSettings);
     const settingsLogoutBtn = $('#settings-logout-btn');
     if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', handleDemoLogout);
+    const settingsDeleteAccountBtn = $('#settings-delete-account-btn');
+    if (settingsDeleteAccountBtn) settingsDeleteAccountBtn.addEventListener('click', handleDeleteAccount);
     const settingsToggle = $('#settings-notifications-toggle');
     if (settingsToggle) {
-      settingsToggle.addEventListener('change', () => {
-        Credo.setSetting('notificationsEnabled', settingsToggle.checked);
+      settingsToggle.addEventListener('change', (event) => {
+        const userId = Credo.getCurrentUserId();
+        if (userId) Credo.setNotificationsEnabled(userId, event.target.checked);
       });
     }
 

@@ -21,6 +21,7 @@ type ReportRow = {
   details: string;
   status: string;
   reviewedBy?: string | null;
+  targetMessageId?: string | null;
   createdAt: string;
   reviewedAt?: string | null;
 };
@@ -100,14 +101,15 @@ Deno.serve(async (req: Request) => {
       reviewedAt: new Date().toISOString(),
     })
     .eq('id', reportId)
-    .select('id, "reporterId", "targetId", reason, details, status, "reviewedBy", "createdAt", "reviewedAt"')
+    .eq('status', 'open')
+    .select('id, "reporterId", "targetId", "targetMessageId", reason, details, status, "reviewedBy", "createdAt", "reviewedAt"')
     .maybeSingle();
 
   if (updateErr) {
     console.error('report update error:', updateErr);
     return err('report_update_failed', 500);
   }
-  if (!updated) return err('report_not_found', 404);
+  if (!updated) return err('report_not_open', 409);
 
   const serialized = await serializeReports(supabase, [updated as ReportRow]);
   return ok({ report: serialized[0] ?? updated });
@@ -119,7 +121,7 @@ async function loadReports(
 ): Promise<{ ok: true; reports: Array<Record<string, unknown>>; rawReports: ReportRow[] } | { ok: false; error: string }> {
   let query = supabase
     .from('user_reports')
-    .select('id, "reporterId", "targetId", reason, details, status, "reviewedBy", "createdAt", "reviewedAt"');
+    .select('id, "reporterId", "targetId", "targetMessageId", reason, details, status, "reviewedBy", "createdAt", "reviewedAt"');
 
   if (status !== 'all') {
     query = query.eq('status', status);

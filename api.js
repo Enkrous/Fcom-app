@@ -37,6 +37,7 @@ const API = (() => {
 
   let _syncTimer = null;
   let _syncInFlight = null;
+  let _blocksSyncedForUserId = null;
   let _origSendMessage = null;
 
   function getToken()     { return localStorage.getItem(TOKEN_KEY); }
@@ -402,7 +403,7 @@ const API = (() => {
       const [serverResult, groupsResult, blocksResult] = await Promise.all([
         _syncFromServer(meResult.user),
         _syncGroupsFromServer(),
-        _syncBlocksFromServer(),
+        refreshBlockedUsers(),
       ]);
       return {
         ok: serverResult.ok && groupsResult.ok,
@@ -608,7 +609,7 @@ const API = (() => {
     await _syncFromServer(seededUser);
     await Promise.allSettled([
       _syncGroupsFromServer(),
-      _syncBlocksFromServer(),
+      refreshBlockedUsers({ force: true }),
     ]);
     Credo.updateUser(result.user.id, { passwordHash: '__set__' });
     startLiveSync();
@@ -671,6 +672,7 @@ const API = (() => {
     }
     setActiveSession(null, null);
     setRegToken(null);
+    _blocksSyncedForUserId = null;
     stopLiveSync();
     Credo.setCurrentUserId(null);
     return { ok: true };
@@ -704,6 +706,7 @@ const API = (() => {
     setActiveSession(userId, nextToken);
     Credo.setCurrentUserId(userId);
     Credo.markDeviceAccount(userId);
+    _blocksSyncedForUserId = null;
 
     const syncResult = await syncNow();
     if (syncResult?.ok) {
@@ -822,6 +825,18 @@ const API = (() => {
     }
   }
 
+  // Обновить локальный кэш блокировок после входа, блокировки или разблокировки.
+  async function refreshBlockedUsers({ force = false } = {}) {
+    const currentUserId = Credo.getCurrentUserId();
+    if (!force && currentUserId && _blocksSyncedForUserId === currentUserId) {
+      return { ok: true, changed: false, blocksChanged: false, skipped: true };
+    }
+
+    const result = await syncBlocks();
+    if (result.ok && currentUserId) _blocksSyncedForUserId = currentUserId;
+    return result;
+  }
+
   async function blockUser(targetId) {
     const currentUser = Credo.getUserById(Credo.getCurrentUserId());
     if (!currentUser) return { ok: false, error: 'not_authenticated' };
@@ -841,7 +856,7 @@ const API = (() => {
     }
 
     if (result.ok && typeof Credo.saveUserBlocks === 'function') {
-      Credo.saveUserBlocks(result.blocks || []);
+      await refreshBlockedUsers({ force: true });
       _emitSync({ ok: true, changed: true, blocksChanged: true });
     }
     return result;
@@ -866,24 +881,43 @@ const API = (() => {
     }
 
     if (result.ok && typeof Credo.saveUserBlocks === 'function') {
-      Credo.saveUserBlocks(result.blocks || []);
+      await refreshBlockedUsers({ force: true });
       _emitSync({ ok: true, changed: true, blocksChanged: true });
     }
     return result;
   }
 
-  async function reportUser(targetId, reason, details = '') {
+  async function reportUser(targetId, reason, details = '', targetMessageId = '') {
     const currentUser = Credo.getUserById(Credo.getCurrentUserId());
     if (!currentUser) return { ok: false, error: 'not_authenticated' };
 
     if (!FUNCTIONS_BASE) {
       const reports = _loadLocalReports();
+      const normalizedReason = reason === 'fake_profile' ? 'fake_account' : reason;
+      const normalizedDetails = String(details || '').trim().slice(0, 1000);
+      if (!targetId || targetId === currentUser.id) {
+        return { ok: false, error: targetId === currentUser.id ? 'cannot_report_self' : 'targetId_required' };
+      }
+      if (!Credo.getUserById(targetId)) {
+        return { ok: false, error: 'target_not_found' };
+      }
+      if (!['spam', 'harassment', 'fake_account', 'inappropriate_content', 'other'].includes(normalizedReason)) {
+        return { ok: false, error: 'invalid_reason' };
+      }
+      if (reports.some((report) =>
+        report.reporterId === currentUser.id &&
+        report.targetId === targetId &&
+        report.status === 'open'
+      )) {
+        return { ok: false, error: 'report_already_open' };
+      }
       const report = {
         id: Credo.generateId(),
         reporterId: currentUser.id,
         targetId,
-        reason,
-        details: String(details || '').trim(),
+        reason: normalizedReason,
+        details: normalizedDetails,
+        ...(targetMessageId ? { targetMessageId } : {}),
         status: 'open',
         createdAt: new Date().toISOString(),
         reporter: currentUser,
@@ -897,11 +931,50 @@ const API = (() => {
     try {
       return await _call('/report-user', {
         method: 'POST',
-        body: { targetId, reason, details },
+        body: {
+          action: 'create',
+          targetId,
+          reason,
+          details: String(details || '').trim().slice(0, 1000),
+          ...(targetMessageId ? { targetMessageId } : {}),
+        },
       });
     } catch {
       return { ok: false, error: 'network_error' };
     }
+  }
+
+  async function deleteAccount() {
+    const currentUserId = Credo.getCurrentUserId();
+    if (!currentUserId) return { ok: false, error: 'not_authenticated' };
+
+    if (!FUNCTIONS_BASE) {
+      if (typeof Credo.removeUserLocal === 'function') Credo.removeUserLocal(currentUserId);
+      removeTokenForUser(currentUserId);
+      setActiveSession(null, null);
+      setRegToken(null);
+      _blocksSyncedForUserId = null;
+      stopLiveSync();
+      return { ok: true };
+    }
+
+    let result;
+    try {
+      result = await _call('/delete-account', { method: 'POST' });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+
+    if (!result?.ok) return result;
+
+    if (typeof Credo.removeUserLocal === 'function') Credo.removeUserLocal(currentUserId);
+    removeTokenForUser(currentUserId);
+    setActiveSession(null, null);
+    setRegToken(null);
+    _blocksSyncedForUserId = null;
+    stopLiveSync();
+    Credo.setCurrentUserId(null);
+    return result;
   }
 
   async function listReports(status = 'open') {
@@ -1272,9 +1345,11 @@ const API = (() => {
     respondGroupInvite,
     leaveGroup,
     syncBlocks,
+    refreshBlockedUsers,
     blockUser,
     unblockUser,
     reportUser,
+    deleteAccount,
     listReports,
     reviewReport,
     uploadMedia,

@@ -70,6 +70,27 @@ export async function hasUserBlock(
   }
 }
 
+/** True if either user has blocked the other, in either direction. */
+export async function isBlockedEitherWay(
+  supabase: SupabaseClient,
+  userA: string,
+  userB: string,
+): Promise<boolean> {
+  if (!userA || !userB) return false;
+
+  const { data, error } = await supabase
+    .from('user_blocks')
+    .select('"blockerId", "blockedId"')
+    .or(
+      `and("blockerId".eq.${userA},"blockedId".eq.${userB}),` +
+      `and("blockerId".eq.${userB},"blockedId".eq.${userA})`,
+    )
+    .limit(1);
+
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+
 export async function filterBlockedPeers<T extends { id: string }>(
   supabase: SupabaseClient,
   userId: string,

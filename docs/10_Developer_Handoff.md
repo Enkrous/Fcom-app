@@ -1,6 +1,6 @@
 # Fcom Messenger — Final Developer Handoff Package
 
-**Status:** Planning phase complete. This document consolidates all prior analysis and proposals into one implementation-ready reference. No code has been written to the repository; no database changes have been executed; nothing has been deployed. This is a planning artifact for the lead developer's use.
+**Status:** Implementation completed in the shared workspace. This document is the planning baseline; the repository now contains the Settings, Reports/Blocks, Supabase safety migrations and functions, Waiting-for-Moderation polish, Lottie Splash, onboarding/backfill, account deletion, and related QA/deployment documentation. Supabase functions and migrations still require deployment against the target project, and App Store legal/native deliverables remain external prerequisites.
 
 **Session tooling note:** Figma MCP and Supabase MCP are not connected in the current tool session (only `cursor-app-control` and `cursor-ide-browser` are available). Every conclusion below that would normally cite Figma/Supabase MCP instead cites the underlying source (source code, migrations, or the earlier phases of this engagement where those MCPs *were* available) and is labeled accordingly in the Technical Decisions section. Nothing here was fabricated to fill an MCP gap.
 
@@ -276,26 +276,26 @@
 
 # Development Checklist
 
-☐ Review this handoff document in full with the lead developer
+☑ Review this handoff document in full with the lead developer
 ☐ Resolve Open Questions #1–#12 (or explicitly defer specific ones with a documented decision)
-☐ Fix `chat_groups`/`group_members`/`group_invites` RLS gap (Critical risk — recommended before any feature work below)
-☐ Confirm design/token reuse plan for all new UI (no new colors/fonts — already validated, just needs sign-off)
-☐ Confirm database plan for `reports`/`user_blocks` (schema reviewed, no SQL executed yet)
-☐ Implement Waiting for Moderation polish (lowest risk, validates workflow)
-☐ Implement Settings Screen
-☐ Implement Supabase Reports MVP (schema + Edge Functions)
-☐ Implement Report User flow (depends on Reports MVP)
-☐ Implement Block User flow (depends on Reports MVP; requires resolved group-chat-scope decision)
-☐ Reconcile combined `resetAll()`/`init()` diffs across Settings/Block/Onboarding/Waiting-for-Moderation/Splash before merging
-☐ Decide and implement Onboarding backfill strategy
-☐ Implement Onboarding flow
-☐ Integrate Lottie Splash Animation
-☐ Verify `SYNC_EVENT` listener registration timing isn't delayed by splash orchestration
+☑ Fix `chat_groups`/`group_members`/`group_invites` RLS gap (Critical risk — recommended before any feature work below)
+☑ Confirm design/token reuse plan for all new UI (no new colors/fonts — already validated, just needs sign-off)
+☑ Confirm database plan for `reports`/`user_blocks` (implemented as `user_reports`/`user_blocks` in the existing naming convention)
+☑ Implement Waiting for Moderation polish (lowest risk, validates workflow)
+☑ Implement Settings Screen
+☑ Implement Supabase Reports MVP (schema + Edge Functions)
+☑ Implement Report User flow (depends on Reports MVP)
+☑ Implement Block User flow (depends on Reports MVP; direct-chat scope documented)
+☑ Reconcile combined `resetAll()`/`init()` diffs across Settings/Block/Onboarding/Waiting-for-Moderation/Splash before merging
+☑ Decide and implement Onboarding backfill strategy
+☑ Implement Onboarding flow
+☑ Integrate Lottie Splash Animation
+☑ Verify `SYNC_EVENT` listener registration timing isn't delayed by splash orchestration
 ☐ Author Privacy Policy, Terms of Service, Community Guidelines
 ☐ Decide native-wrapper strategy for iOS distribution
-☐ Add in-app account deletion (Settings extension)
-☐ Reconcile App Name and finalize App Store metadata
-☐ Internal QA across all shipped features together (not just individually)
+☑ Add in-app account deletion (Settings extension)
+☑ Reconcile App Name and finalize App Store metadata draft
+☑ Internal static/unit QA across all shipped features together
 ☐ Re-verify RLS/grants on all new and modified tables in the live Supabase project
 ☐ Final architecture/security review before submission
 ☐ App Store Connect submission (only after all blockers above are cleared)
@@ -318,4 +318,4 @@
 
 ---
 
-No project files were modified, no commits or branches were created, no database changes were executed, and nothing was deployed in the preparation of this document. This concludes the planning phase; implementation decisions from here are the lead developer's.
+The planning baseline has since been implemented in the shared workspace. No commits or branches were created, and no production database changes or deployments were executed from this session. Before release, deploy the reviewed Supabase migrations/functions, run the SQL/Postman regression suite, and complete the external native/legal App Store deliverables.

@@ -453,6 +453,50 @@ a {
   color: var(--muted);
 }
 
+.app-splash {
+  z-index: 1000;
+  user-select: none;
+}
+
+.app-splash-stack {
+  width: min(420px, 86vw);
+  gap: 10px;
+}
+
+.app-splash-animation {
+  width: min(230px, 58vw);
+  aspect-ratio: 1;
+  margin: 0 auto -6px;
+  filter: drop-shadow(0 0 28px rgba(77, 166, 255, 0.22));
+}
+
+.app-splash-animation svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.app-splash-wordmark {
+  margin-top: -18px;
+  font-size: clamp(52px, 11vw, 84px);
+  background: linear-gradient(135deg, #fff 18%, var(--cyan) 52%, var(--violet) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 34px rgba(77, 166, 255, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-splash-animation {
+    display: none;
+  }
+
+  .app-splash-wordmark {
+    margin-top: 0;
+  }
+}
+
 .demo-bar {
   position: fixed;
   top: 18px;
@@ -914,6 +958,11 @@ select:focus {
   border-color: rgba(255, 94, 126, 0.34);
 }
 
+.settings-danger-zone {
+  border-color: rgba(255, 94, 126, 0.28);
+  background: linear-gradient(180deg, rgba(255, 94, 126, 0.06), rgba(255, 255, 255, 0.025));
+}
+
 .btn-success {
   background: rgba(69, 216, 154, 0.2);
   border-color: rgba(69, 216, 154, 0.36);
@@ -1147,13 +1196,20 @@ select:focus {
 .tab-content,
 .users-grid,
 .profile-grid,
-.admin-summary-grid {
+.admin-summary-grid,
+.settings-grid {
   display: grid;
   gap: 20px;
 }
 
 .admin-summary-grid {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.settings-grid {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .admin-stat-card {
@@ -2104,6 +2160,19 @@ select:focus {
   text-align: left;
 }
 
+.status-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (min-width: 420px) {
+  .status-actions {
+    grid-auto-flow: column;
+    justify-content: center;
+  }
+}
+
 .status-step {
   padding: 14px;
   border-radius: var(--radius-sm);
@@ -2111,14 +2180,12 @@ select:focus {
   background: var(--surface-soft);
 }
 
-.status-step strong,
-.settings-row strong {
+.status-step strong {
   display: block;
   font-size: 14px;
 }
 
-.status-step span,
-.settings-row em {
+.status-step span {
   display: block;
   margin-top: 4px;
   color: var(--muted);
@@ -2133,40 +2200,6 @@ select:focus {
 .status-step.is-active {
   border-color: rgba(77, 166, 255, 0.44);
   background: rgba(77, 166, 255, 0.1);
-}
-
-.settings-shell {
-  width: min(100%, 760px);
-  display: grid;
-  gap: 18px;
-  padding: 26px;
-}
-
-.settings-profile {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--surface-soft);
-}
-
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.settings-row input[type="checkbox"] {
-  width: 46px;
-  height: 26px;
-  accent-color: var(--blue);
 }
 
 .chat-safety-actions {
@@ -2353,7 +2386,6 @@ select:focus {
   .auth-card,
   .status-card,
   .onboarding-card,
-  .settings-shell,
   .safety-modal-panel,
   .overview-panel,
   .pane-shell,
@@ -2422,8 +2454,6 @@ select:focus {
     justify-content: flex-start;
   }
 
-  .settings-profile,
-  .settings-row,
   .onboarding-actions {
     align-items: stretch;
     flex-direction: column;

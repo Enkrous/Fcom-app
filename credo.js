@@ -8,6 +8,11 @@
  *   credo_chats        — JSON-объект { "u1::u2": [...messages] }
  *   credo_blocked      — "true" если устройство заблокировано
  *   credo_current_user — id текущего пользователя
+ *   credo_settings     — JSON-объект { [userId]: { notificationsEnabled } }, локально на устройстве
+ *   credo_onboarding_seen — JSON-объект { [userId]: true }, локально на устройстве
+ *   credo_onboarding_backfill_v1 — одноразовая отметка миграции старых локальных аккаунтов
+ *   credo_user_blocks  — JSON-массив локального кэша блокировок пользователей
+ *   credo_user_reports — JSON-массив локальных жалоб в demo-режиме
  */
 
 'use strict';
@@ -77,30 +82,66 @@ const Credo = (() => {
     saveJSON('credo_user_blocks', Array.isArray(blocks) ? blocks : []);
   }
 
-  function getSettings() {
-    const settings = loadJSON('credo_settings', {});
-    return settings && typeof settings === 'object' ? settings : {};
+  // --------------- Настройки (локальные, per-device) ---------------
+  // credo_settings — JSON-объект { [userId]: { notificationsEnabled } }
+  // Хранится только на этом устройстве — не синхронизируется с backend.
+
+  function getSettings(userId) {
+    const all = loadJSON('credo_settings', {});
+    if (userId === undefined || userId === null) return all;
+    return all[userId] || {};
   }
 
-  function setSetting(key, value) {
-    const settings = getSettings();
-    settings[key] = value;
-    saveJSON('credo_settings', settings);
-    return settings;
+  function getNotificationsEnabled(userId) {
+    return getSettings(userId).notificationsEnabled !== false;
   }
 
-  function getSetting(key, fallback = null) {
-    const settings = getSettings();
-    return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : fallback;
+  function setNotificationsEnabled(userId, enabled) {
+    if (!userId) return;
+    const all = loadJSON('credo_settings', {});
+    all[userId] = { ...(all[userId] || {}), notificationsEnabled: Boolean(enabled) };
+    saveJSON('credo_settings', all);
   }
 
-  function hasSeenOnboarding() {
-    return localStorage.getItem('fcom_onboarding_seen_v1') === 'true';
+  // --------------- Онбординг (локальный, per-device) ---------------
+
+  function hasSeenOnboarding(userId) {
+    if (!userId) return false;
+    const seen = loadJSON('credo_onboarding_seen', {});
+    return Boolean(seen[userId]);
   }
 
+  function markOnboardingSeen(userId) {
+    if (!userId) return;
+    const seen = loadJSON('credo_onboarding_seen', {});
+    seen[userId] = true;
+    saveJSON('credo_onboarding_seen', seen);
+  }
+
+  // Existing installations used to have no per-user onboarding state. Mark
+  // accounts that already existed before this feature as seen once, so a
+  // returning user is not interrupted by a new onboarding flow. Accounts
+  // created after this migration keep the normal first-login experience.
+  function seedOnboardingSeenForExistingUsers() {
+    if (localStorage.getItem('credo_onboarding_backfill_v1') === 'true') return;
+
+    const seen = loadJSON('credo_onboarding_seen', {});
+    getUsers().forEach((user) => {
+      if (user?.id) seen[user.id] = true;
+    });
+    saveJSON('credo_onboarding_seen', seen);
+    localStorage.setItem('credo_onboarding_backfill_v1', 'true');
+  }
+
+  // Backward-compatible wrapper for older callers.
   function setOnboardingSeen(seen = true) {
-    if (seen) localStorage.setItem('fcom_onboarding_seen_v1', 'true');
-    else localStorage.removeItem('fcom_onboarding_seen_v1');
+    const userId = getCurrentUserId();
+    if (seen) markOnboardingSeen(userId);
+    else {
+      const all = loadJSON('credo_onboarding_seen', {});
+      if (userId) delete all[userId];
+      saveJSON('credo_onboarding_seen', all);
+    }
   }
 
   function getBlockedUserIds(userId) {
@@ -118,9 +159,35 @@ const Credo = (() => {
     return getBlockedUserIds(firstUserId).has(secondUserId);
   }
 
+  // Compatibility helpers matching the Report/Block MVP contract. The
+  // project stores richer block rows so the existing sync/admin surfaces can
+  // render the blocked user; these helpers expose the simpler id-based API.
+  function setBlockedUserIds(userId, blockedIds) {
+    if (!userId) return;
+
+    const ids = new Set(Array.isArray(blockedIds) ? blockedIds.filter(Boolean) : []);
+    const next = getUserBlocks().filter((block) => block.blockerId !== userId);
+    ids.forEach((blockedId) => {
+      next.push({
+        blockerId: userId,
+        blockedId,
+        createdAt: new Date().toISOString(),
+        user: getUserById(blockedId),
+      });
+    });
+    saveUserBlocks(next);
+  }
+
+  function isUserBlocked(userId, otherUserId) {
+    return isUserBlockedFor(userId, otherUserId);
+  }
+
   function blockUserLocal(blockerId, blockedId) {
     if (!blockerId || !blockedId || blockerId === blockedId) {
       return { ok: false, error: 'invalid_block_target' };
+    }
+    if (!getUserById(blockedId)) {
+      return { ok: false, error: 'target_not_found' };
     }
 
     const blocks = getUserBlocks();
@@ -708,15 +775,73 @@ const Credo = (() => {
     localStorage.removeItem('credo_user_blocks');
     localStorage.removeItem('credo_user_reports');
     localStorage.removeItem('credo_settings');
+    localStorage.removeItem('credo_onboarding_seen');
+    localStorage.removeItem('credo_onboarding_backfill_v1');
     localStorage.removeItem('fcom_onboarding_seen_v1');
     localStorage.removeItem('credo_device_accounts');
     localStorage.removeItem('credo_blocked');
     localStorage.removeItem('credo_current_user');
   }
 
+  // Remove only one account from this device after a successful server-side
+  // deletion. Other locally remembered accounts remain available.
+  function removeUserLocal(userId) {
+    if (!userId) return;
+
+    saveUsers(getUsers()
+      .filter((user) => user.id !== userId)
+      .map((user) => ({
+        ...user,
+        chats: Array.isArray(user.chats) ? user.chats.filter((id) => id !== userId) : [],
+      })));
+
+    const deviceAccounts = getDeviceAccounts().filter((user) => user.id !== userId);
+    saveJSON('credo_device_accounts', deviceAccounts);
+
+    const chats = getChats();
+    Object.keys(chats).forEach((key) => {
+      if (key.split('::').includes(userId)) delete chats[key];
+    });
+    saveChats(chats);
+
+    const groupChats = getGroupChats();
+    Object.keys(groupChats).forEach((key) => {
+      groupChats[key] = Array.isArray(groupChats[key])
+        ? groupChats[key].filter((message) => message.from !== userId)
+        : [];
+    });
+    saveGroupChats(groupChats);
+
+    saveGroups(getGroups().filter((group) => group.createdBy !== userId));
+    saveGroupInvites(getGroupInvites().filter((invite) =>
+      invite.invitedUserId !== userId && invite.invitedBy !== userId
+    ));
+
+    saveRateLog(getRateLog().filter((entry) => entry.from !== userId && entry.to !== userId));
+    saveUserBlocks(getUserBlocks().filter((block) =>
+      block.blockerId !== userId && block.blockedId !== userId
+    ));
+
+    const reports = loadJSON('credo_user_reports', []);
+    saveJSON('credo_user_reports', Array.isArray(reports)
+      ? reports.filter((report) => report.reporterId !== userId && report.targetId !== userId)
+      : []);
+
+    const settings = loadJSON('credo_settings', {});
+    delete settings[userId];
+    saveJSON('credo_settings', settings);
+
+    const onboarding = loadJSON('credo_onboarding_seen', {});
+    delete onboarding[userId];
+    saveJSON('credo_onboarding_seen', onboarding);
+
+    if (getCurrentUserId() === userId) setCurrentUserId(null);
+  }
+
   // --------------- Публичный API ---------------
 
   migrateSchoolsToFiztex();
+  seedOnboardingSeenForExistingUsers();
 
   return {
     // Данные
@@ -730,6 +855,11 @@ const Credo = (() => {
     keepOnlyDeviceAccount,
     isDeviceBlocked,
     blockDevice,
+
+    // Настройки
+    getNotificationsEnabled,
+    setNotificationsEnabled,
+    removeUserLocal,
 
     // Регистрация
     registerUser,
@@ -746,12 +876,13 @@ const Credo = (() => {
     getGroupInvites,
     getUserBlocks,
     saveUserBlocks,
-    getSettings,
-    setSetting,
-    getSetting,
     hasSeenOnboarding,
+    markOnboardingSeen,
     setOnboardingSeen,
+    seedOnboardingSeenForExistingUsers,
     getBlockedUserIds,
+    setBlockedUserIds,
+    isUserBlocked,
     isUserBlockedFor,
     blockUserLocal,
     unblockUserLocal,

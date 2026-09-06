@@ -2,12 +2,12 @@ import { ok, err, corsPrelight } from '../_shared/response.ts';
 import { getServiceClient } from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb } from '../_shared/ratelimit.ts';
-import { isSameSchool } from '../_shared/school.ts';
 
 const REPORT_REASONS = new Set([
   'spam',
   'harassment',
   'fake_account',
+  'fake_profile',
   'inappropriate_content',
   'other',
 ]);
@@ -21,7 +21,7 @@ Deno.serve(async (req: Request) => {
 
   const supabase = getServiceClient();
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-  const allowed = await rateLimitDb(supabase, ip, 'report-user', 10, 60_000);
+  const allowed = await rateLimitDb(supabase, ip, 'reports', 5, 60 * 60_000);
   if (!allowed) return err('rate_limit_exceeded', 429);
 
   let payload;
@@ -33,14 +33,14 @@ Deno.serve(async (req: Request) => {
 
   const { data: caller } = await supabase
     .from('users')
-    .select('id, school, status')
+    .select('id, status')
     .eq('id', payload.sub)
     .maybeSingle();
 
   if (!caller) return err('caller_not_found', 404);
   if (caller.status !== 'approved') return err('forbidden', 403);
 
-  let body: { targetId?: string; reason?: string; details?: string };
+  let body: { targetId?: string; targetMessageId?: string; reason?: string; details?: string };
   try {
     body = await req.json();
   } catch {
@@ -48,37 +48,71 @@ Deno.serve(async (req: Request) => {
   }
 
   const targetId = String(body.targetId ?? '').trim();
+  const targetMessageId = String(body.targetMessageId ?? '').trim();
   const reason = String(body.reason ?? '').trim();
-  const details = String(body.details ?? '').trim();
+  const normalizedReason = reason === 'fake_profile' ? 'fake_account' : reason;
+  const details = String(body.details ?? '').trim().slice(0, 1000);
 
   if (!targetId) return err('targetId_required');
   if (targetId === caller.id) return err('cannot_report_self');
   if (!REPORT_REASONS.has(reason)) return err('invalid_reason');
-  if (details.length > 1000) return err('details_too_long');
 
   const { data: target } = await supabase
     .from('users')
-    .select('id, school, status')
+    .select('id')
     .eq('id', targetId)
     .maybeSingle();
 
   if (!target) return err('target_not_found', 404);
-  if (target.status !== 'approved') return err('target_not_approved', 403);
-  if (!isSameSchool(target.school, caller.school)) return err('cross_school_forbidden', 403);
+
+  if (targetMessageId) {
+    const { data: targetMessage, error: targetMessageErr } = await supabase
+      .from('messages')
+      .select('"fromId", "toId", "groupId"')
+      .eq('id', targetMessageId)
+      .maybeSingle();
+
+    if (targetMessageErr) {
+      console.error('report target message lookup error:', targetMessageErr);
+      return err('report_failed', 500);
+    }
+
+    const isDirectMessage = targetMessage
+      && !targetMessage.groupId
+      && ((targetMessage.fromId === caller.id && targetMessage.toId === targetId)
+        || (targetMessage.fromId === targetId && targetMessage.toId === caller.id));
+    if (!isDirectMessage) return err('target_message_invalid', 400);
+  }
+
+  const { data: existingReport, error: existingErr } = await supabase
+    .from('user_reports')
+    .select('id')
+    .eq('reporterId', caller.id)
+    .eq('targetId', targetId)
+    .eq('status', 'open')
+    .maybeSingle();
+
+  if (existingErr) {
+    console.error('report duplicate check error:', existingErr);
+    return err('report_failed', 500);
+  }
+  if (existingReport) return err('report_already_open', 409);
 
   const { data: report, error: insertErr } = await supabase
     .from('user_reports')
     .insert({
       reporterId: caller.id,
       targetId,
-      reason,
+      ...(targetMessageId ? { targetMessageId } : {}),
+      reason: normalizedReason,
       details,
       status: 'open',
     })
-    .select('id, "reporterId", "targetId", reason, details, status, "createdAt"')
+    .select('id, "reporterId", "targetId", "targetMessageId", reason, details, status, "createdAt"')
     .single();
 
   if (insertErr || !report) {
+    if (insertErr?.code === '23505') return err('report_already_open', 409);
     console.error('report insert error:', insertErr);
     return err('report_failed', 500);
   }
