@@ -22,18 +22,20 @@
  *   reflects reality as soon as they open the chat.
  */
 
-import { ok, err, corsPrelight }     from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { getGroupAccess }            from '../_shared/groups.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb }               from '../_shared/ratelimit.ts';
 import { isSameSchool }              from '../_shared/school.ts';
 import { isBlockedEitherWay }        from '../_shared/blocks.ts';
+import { serializeMessageSender }    from '../_shared/message_sender.ts';
+import { queuePushForEvent }         from '../_shared/push.ts';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT     = 100;
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
 
   const jwtSecret = Deno.env.get('JWT_SECRET');
@@ -93,7 +95,7 @@ Deno.serve(async (req: Request) => {
 
       let query = supabase
         .from('messages')
-        .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
+        .select('id, "fromId", "deletedFromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
         .eq('groupId', groupId);
 
       if (paginate) {
@@ -141,7 +143,7 @@ Deno.serve(async (req: Request) => {
     // Build conversation query
     let query = supabase
       .from('messages')
-      .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
+      .select('id, "fromId", "deletedFromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
       .or(
         `and("fromId".eq.${myId},"toId".eq.${partnerId}),` +
         `and("fromId".eq.${partnerId},"toId".eq.${myId})`,
@@ -216,6 +218,11 @@ Deno.serve(async (req: Request) => {
     const attachmentPath = body.attachmentPath?.trim();
     const hasAttachment = Boolean(attachmentPath);
 
+    if (attachmentPath && (!attachmentPath.startsWith(`${myId}/`)
+      || attachmentPath.split('/').some((part) => part === '..' || part === '.'))) {
+      return err('attachment_forbidden');
+    }
+
     if (!toId && !groupId) return err('conversation_target_required');
     if (toId && groupId) return err('conversation_target_conflict');
     if (!text && !hasAttachment) return err('text_required');
@@ -239,13 +246,15 @@ Deno.serve(async (req: Request) => {
           attachmentWidth: body.attachmentWidth ?? null,
           attachmentHeight: body.attachmentHeight ?? null,
         })
-        .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
+        .select('id, "fromId", "deletedFromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
         .single();
 
       if (insertErr || !message) {
         console.error('group message insert error:', insertErr);
         return err('send_failed', 500);
       }
+
+      queuePushForEvent(supabase, { type: 'message', fromId: myId, groupId, messageId: message.id });
 
       const [serialized] = await withSignedAttachmentUrls(supabase, [message]);
       return ok({ message: serialized ?? message });
@@ -276,7 +285,7 @@ Deno.serve(async (req: Request) => {
         attachmentWidth: body.attachmentWidth ?? null,
         attachmentHeight: body.attachmentHeight ?? null,
       })
-      .select('id, "fromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
+      .select('id, "fromId", "deletedFromId", "toId", "groupId", type, text, time, "readAt", "attachmentPath", "attachmentMime", "attachmentBytes", "attachmentWidth", "attachmentHeight"')
       .single();
 
     if (insertErr || !message) {
@@ -284,17 +293,20 @@ Deno.serve(async (req: Request) => {
       return err('send_failed', 500);
     }
 
+    queuePushForEvent(supabase, { type: 'message', fromId: myId, toId, messageId: message.id });
+
     const [serialized] = await withSignedAttachmentUrls(supabase, [message]);
     return ok({ message: serialized ?? message });
   }
 
   return err('method_not_allowed', 405);
-});
+}));
 
 async function withSignedAttachmentUrls(
   supabase: ReturnType<typeof getServiceClient>,
   messages: Array<Record<string, unknown>>,
 ) {
+  messages = messages.map(serializeMessageSender);
   const paths = messages
     .map((message) => String(message.attachmentPath ?? ''))
     .filter(Boolean);

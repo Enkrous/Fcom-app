@@ -11,9 +11,11 @@
  *
  *   BACKEND MODE (SUPABASE_URL filled in):
  *     API.register / API.login / API.setPassword → fetch to Edge Functions.
- *     Credo.approveUser / rejectUser / rateUser / sendMessage are monkey-patched:
+ *     Credo.approveUser / rejectUser / sendMessage are monkey-patched:
  *       they still update localStorage immediately (synchronous, so app.js works
  *       unchanged) and also fire the matching backend call as a side-effect.
+ *     Ratings and rating eligibility use the server response; ratings are awaited
+ *     so a rejected request cannot change the local Credo value.
  *     On login and on page-load, all server data is synced into localStorage so
  *     every Credo.* read method continues to work without modification.
  *
@@ -224,6 +226,7 @@ const API = (() => {
           ? msgRes.messages.map((m) => ({
               id: m.id,
               from: m.fromId,
+              senderDeleted: Boolean(m.senderDeleted),
               to: m.toId ?? null,
               groupId: m.groupId ?? group.id,
               text: m.text || '',
@@ -304,6 +307,7 @@ const API = (() => {
           chats:   existing.chats   || [],
           ...(preservedPasswordHash ? { passwordHash: preservedPasswordHash } : {}),
           ...u,
+          ...(u.canRate ? { canRateForUserId: currentUser.id } : {}),
         };
       });
 
@@ -323,6 +327,7 @@ const API = (() => {
             ? msgRes.messages.map(m => ({
               id: m.id,
               from: m.fromId,
+              senderDeleted: Boolean(m.senderDeleted),
               to: m.toId,
               groupId: m.groupId ?? null,
               text: m.text,
@@ -403,11 +408,11 @@ const API = (() => {
       const [serverResult, groupsResult, blocksResult] = await Promise.all([
         _syncFromServer(meResult.user),
         _syncGroupsFromServer(),
-        refreshBlockedUsers(),
+        refreshBlockedUsers({ force: true }),
       ]);
       return {
-        ok: serverResult.ok && groupsResult.ok,
-        error: serverResult.error || groupsResult.error,
+        ok: serverResult.ok && groupsResult.ok && blocksResult.ok,
+        error: serverResult.error || groupsResult.error || blocksResult.error,
         changed: Boolean(meResult.changed || serverResult.changed || groupsResult.changed || blocksResult.changed),
       };
     })()
@@ -474,16 +479,24 @@ const API = (() => {
       return result;
     };
 
-    // rateUser — only fires backend call if local validation passed
-    const _origRate = Credo.rateUser.bind(Credo);
-    Credo.rateUser = function(fromId, toId, score) {
-      const result = _origRate(fromId, toId, score);
-      if (result.ok) {
-        _call('/rate', { method: 'POST', body: { toId, score } })
-          .catch(e => console.warn('[API] rate backend error:', e));
-      }
-      return result;
+    // The same server rules feed /users and /rate. Other devices' cooldowns
+    // cannot be derived from this browser's local rating log.
+    Credo.canRate = function(fromId, toId) {
+      if (fromId === toId) return { ok: false, reason: 'self' };
+      if (Credo.isUserBlockedFor(fromId, toId)) return { ok: false, reason: 'user_blocked' };
+      if (fromId !== Credo.getCurrentUserId()) return { ok: false, reason: 'sync_required' };
+      const target = Credo.getUserById(toId);
+      return target?.canRateForUserId === fromId && target.canRate
+        ? target.canRate
+        : { ok: false, reason: 'sync_required' };
     };
+    Credo.getUsersToRate = function(fromId) {
+      if (fromId !== Credo.getCurrentUserId()) return [];
+      return Credo.getApprovedUsers().filter((user) =>
+        user.id !== fromId && Credo.canRate(fromId, user.id).ok,
+      );
+    };
+    Credo.rateUser = rateUser;
 
     // sendMessage
     const _origSend = Credo.sendMessage.bind(Credo);
@@ -817,7 +830,8 @@ const API = (() => {
     try {
       const result = await _call('/block-user');
       if (result.ok && typeof Credo.saveUserBlocks === 'function') {
-        Credo.saveUserBlocks(result.blocks || []);
+        const changed = _writeJSONIfChanged('credo_user_blocks', result.blocks || []);
+        return { ...result, changed, blocksChanged: changed };
       }
       return result;
     } catch {
@@ -856,8 +870,9 @@ const API = (() => {
     }
 
     if (result.ok && typeof Credo.saveUserBlocks === 'function') {
-      await refreshBlockedUsers({ force: true });
+      Credo.saveUserBlocks(result.blocks || []);
       _emitSync({ ok: true, changed: true, blocksChanged: true });
+      await syncNow().catch(() => {});
     }
     return result;
   }
@@ -881,9 +896,37 @@ const API = (() => {
     }
 
     if (result.ok && typeof Credo.saveUserBlocks === 'function') {
-      await refreshBlockedUsers({ force: true });
+      Credo.saveUserBlocks(result.blocks || []);
       _emitSync({ ok: true, changed: true, blocksChanged: true });
+      await syncNow().catch(() => {});
     }
+    return result;
+  }
+
+  async function rateUser(fromId, toId, score) {
+    if (!FUNCTIONS_BASE) return Credo.rateUser(fromId, toId, score);
+    if (fromId !== Credo.getCurrentUserId()) return { ok: false, error: 'fromUserId_mismatch' };
+
+    let result;
+    try {
+      result = await _call('/rate', { method: 'POST', body: { fromUserId: fromId, toId, score } });
+    } catch {
+      return { ok: false, error: 'network_error' };
+    }
+    if (!result.ok) return result;
+
+    const target = Credo.getUserById(toId);
+    if (target) {
+      Credo.updateUser(toId, {
+        cred: result.newCred,
+        ...(result.credLevel ? { credLevel: result.credLevel } : {}),
+        ...(typeof result.credProgress === 'number' ? { credProgress: result.credProgress } : {}),
+        canRate: { ok: false, reason: '24h_limit' },
+        canRateForUserId: fromId,
+        ratings: [...(target.ratings || []), result.entry],
+      });
+    }
+    _emitSync({ ok: true, changed: true, usersChanged: true });
     return result;
   }
 
@@ -1341,6 +1384,7 @@ const API = (() => {
     verifyPhone,
     resendOtp,
     sendMessage,
+    rateUser,
     createGroup,
     respondGroupInvite,
     leaveGroup,

@@ -1,4 +1,10 @@
+node_modules/
 .vercel
 .cursor/
 .tmp_fcom/
+.env
+.env.*
 supabase/.temp/
+supabase/.branches/
+*credentials*.json
+test-results/

@@ -1,4 +1,4 @@
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient } from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb } from '../_shared/ratelimit.ts';
@@ -26,7 +26,7 @@ type UserRow = {
   avatarUrl?: string | null;
 };
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (!['GET', 'POST'].includes(req.method)) return err('method_not_allowed', 405);
 
@@ -42,12 +42,13 @@ Deno.serve(async (req: Request) => {
     return err((e as Error).message ?? 'unauthorized', 401);
   }
 
-  const { data: caller } = await supabase
+  const { data: caller, error: callerErr } = await supabase
     .from('users')
     .select('id, school, status')
     .eq('id', payload.sub)
     .maybeSingle();
 
+  if (callerErr) return err('fetch_failed', 500);
   if (!caller) return err('caller_not_found', 404);
   if (caller.status !== 'approved') return err('forbidden', 403);
 
@@ -75,17 +76,18 @@ Deno.serve(async (req: Request) => {
   if (!['block', 'unblock'].includes(action)) return err('invalid_action');
   if (targetId === caller.id) return err('cannot_block_self');
 
-  const { data: target } = await supabase
-    .from('users')
-    .select('id, school, status')
-    .eq('id', targetId)
-    .maybeSingle();
-
-  if (!target) return err('target_not_found', 404);
-  if (target.status !== 'approved') return err('target_not_approved', 403);
-  if (!isSameSchool(target.school, caller.school)) return err('cross_school_forbidden', 403);
-
   if (action === 'block') {
+    const { data: target, error: targetErr } = await supabase
+      .from('users')
+      .select('id, school, status')
+      .eq('id', targetId)
+      .maybeSingle();
+
+    if (targetErr) return err('fetch_failed', 500);
+    if (!target) return err('target_not_found', 404);
+    if (target.status !== 'approved') return err('target_not_approved', 403);
+    if (!isSameSchool(target.school, caller.school)) return err('cross_school_forbidden', 403);
+
     const { error: blockErr } = await supabase
       .from('user_blocks')
       .upsert({
@@ -98,6 +100,8 @@ Deno.serve(async (req: Request) => {
       return err('block_failed', 500);
     }
   } else {
+    // The caller owns this block. Removing it must also work after the target
+    // is rejected, leaves the school or is deleted; repeated unblocks are safe.
     const { error: unblockErr } = await supabase
       .from('user_blocks')
       .delete()
@@ -113,7 +117,7 @@ Deno.serve(async (req: Request) => {
   const result = await loadBlocks(supabase, caller.id);
   if (!result.ok) return err(result.error, 500);
   return ok({ targetId, action, blocks: result.blocks });
-});
+}));
 
 async function loadBlocks(
   supabase: ReturnType<typeof getServiceClient>,

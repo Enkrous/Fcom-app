@@ -15,15 +15,23 @@
  *     pending — pending users (for the approval tab)
  */
 
-import { ok, err, corsPrelight }      from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }      from '../_shared/response.ts';
 import { getServiceClient }           from '../_shared/db.ts';
 import { requireAuthWithRevocation }  from '../_shared/jwt.ts';
 import { isSameSchool }               from '../_shared/school.ts';
-import { filterBlockedPeers }         from '../_shared/blocks.ts';
+import { canRate, loadRatingContext, readAllRows, withCredo } from '../_shared/credo.ts';
+import type { RatingContext } from '../_shared/credo.ts';
 
 const PUBLIC_USER_FIELDS = 'id, "fullName", school, grade, nickname, "phoneVerified", role, status, cred, "createdAt", "avatarUrl"';
 
-Deno.serve(async (req: Request) => {
+type UserRow = {
+  id: string;
+  school: string;
+  cred: number;
+  [field: string]: unknown;
+};
+
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'GET') return err('method_not_allowed', 405);
 
@@ -41,12 +49,13 @@ Deno.serve(async (req: Request) => {
   const myId = payload.sub;
 
   // Load caller
-  const { data: caller } = await supabase
+  const { data: caller, error: callerErr } = await supabase
     .from('users')
     .select('id, school, role, status, cred')
     .eq('id', myId)
     .maybeSingle();
 
+  if (callerErr) return err('fetch_failed', 500);
   if (!caller)                     return err('caller_not_found', 404);
   if (caller.status !== 'approved') return err('forbidden', 403);
 
@@ -57,77 +66,39 @@ Deno.serve(async (req: Request) => {
   // We intentionally do not use `.eq('school', caller.school)` because the UI
   // collects free-form school names, so casing / extra spaces would split
   // people from the same real school into separate invisible groups.
-  const { data: approvedUsers, error: approvedErr } = await supabase
-    .from('users')
-    .select(PUBLIC_USER_FIELDS)
-    .eq('status', 'approved')
-    .neq('id', myId)
-    .order('cred', { ascending: false });
-
-  if (approvedErr) {
-    console.error('users fetch error:', approvedErr);
-    return err('fetch_failed', 500);
-  }
-
-  // Same normalized-school filtering for pending users.
-  const { data: pendingUsers, error: pendingErr } = await supabase
-    .from('users')
-    .select(PUBLIC_USER_FIELDS)
-    .eq('status', 'pending')
-    .order('createdAt', { ascending: true });
-
-  if (pendingErr) {
-    console.error('pending fetch error:', pendingErr);
-    return err('fetch_failed', 500);
-  }
-
-  let users = (approvedUsers ?? []).filter((user: { school: string }) =>
-    isSameSchool(user.school, caller.school),
-  );
-  users = await filterBlockedPeers(supabase, myId, users);
-  const pending = caller.role === 'admin'
-    ? (pendingUsers ?? [])
-    : [];
-
-  // If rateTargets=true, filter to only users the caller can rate
-  // (had conversation + no rating in last 24h)
-  if (rateTargets && users.length > 0) {
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    // Get partners the caller has chatted with
-    const { data: sentMsgs } = await supabase
-      .from('messages')
-      .select('"toId"')
-      .eq('fromId', myId);
-
-    const { data: receivedMsgs } = await supabase
-      .from('messages')
-      .select('"fromId"')
-      .eq('toId', myId);
-
-    const chatPartnerIds = new Set<string>([
-      ...(sentMsgs ?? []).map((m: { toId: string }) => m.toId),
-      ...(receivedMsgs ?? []).map((m: { fromId: string }) => m.fromId),
+  let approvedUsers: UserRow[];
+  let pendingUsers: UserRow[];
+  let context: RatingContext;
+  try {
+    [approvedUsers, pendingUsers, context] = await Promise.all([
+      readAllRows<UserRow>((start, end) => supabase.from('users')
+        .select(PUBLIC_USER_FIELDS).eq('status', 'approved').neq('id', myId)
+        .order('cred', { ascending: false }).order('id').range(start, end)),
+      caller.role === 'admin'
+        ? readAllRows<UserRow>((start, end) => supabase.from('users')
+          .select(PUBLIC_USER_FIELDS).eq('status', 'pending')
+          .order('createdAt', { ascending: true }).order('id').range(start, end))
+        : Promise.resolve([]),
+      loadRatingContext(supabase, myId),
     ]);
-
-    // Get users already rated in last 24h
-    const { data: recentRatings } = await supabase
-      .from('rate_log')
-      .select('"to"')
-      .eq('from', myId)
-      .gt('date', dayAgo);
-
-    const recentlyRatedIds = new Set(
-      (recentRatings ?? []).map((r: { to: string }) => r.to),
-    );
-
-    users = users.filter((u: { id: string }) =>
-      chatPartnerIds.has(u.id) && !recentlyRatedIds.has(u.id),
-    );
+  } catch (error) {
+    console.error('users and rating eligibility fetch error:', error);
+    return err('fetch_failed', 500);
   }
+
+  const users = approvedUsers
+    .filter((user: { id: string; school: string }) =>
+      isSameSchool(user.school, caller.school) && !context.blockedPeerIds.has(user.id),
+    )
+    .map((user) => ({ ...withCredo(user), canRate: canRate(myId, user.id, context) }));
+  const pending = caller.role === 'admin'
+    ? pendingUsers.map((user) => withCredo(user))
+    : [];
+  const usersToRate = users.filter((user) => user.canRate.ok);
 
   return ok({
-    users,
+    users: rateTargets ? usersToRate : users,
     pending,
+    usersToRate,
   });
-});
+}));

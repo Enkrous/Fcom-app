@@ -45,17 +45,18 @@
  *  Response: { ok: true, entry: {...}, newCred: number }
  */
 
-import { ok, err, corsPrelight }     from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb }               from '../_shared/ratelimit.ts';
 import { isSameSchool }              from '../_shared/school.ts';
-import { hasUserBlock }              from '../_shared/blocks.ts';
+import { isBlockedEitherWay }        from '../_shared/blocks.ts';
+import { canRate, getCredLevel, getCredProgress } from '../_shared/credo.ts';
 
 const SCORE_DELTA: Record<number, number> = { 1: -2, 2: -1, 3: 0, 4: 1, 5: 2 };
 const MAX_DAILY_CHANGE = 5;
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -101,29 +102,37 @@ Deno.serve(async (req: Request) => {
   if (fromId === toId) return err('self');
 
   // Load both users
-  const [{ data: rater }, { data: target }] = await Promise.all([
+  const [{ data: rater, error: raterErr }, { data: target, error: targetErr }] = await Promise.all([
     supabase.from('users').select('id, school, status, cred').eq('id', fromId).maybeSingle(),
     supabase.from('users').select('id, school, status, cred').eq('id', toId).maybeSingle(),
   ]);
 
+  if (raterErr || targetErr) return err('fetch_failed', 500);
   if (!rater)  return err('user_not_found', 404);
   if (!target) return err('user_not_found', 404);
 
   if (rater.status  !== 'approved') return err('forbidden', 403);
   if (target.status !== 'approved') return err('target_not_approved', 403);
   if (!isSameSchool(rater.school, target.school)) return err('cross_school_forbidden', 403);
-  if (await hasUserBlock(supabase, fromId, toId!)) return err('user_blocked', 403);
+  let blocked;
+  try {
+    blocked = await isBlockedEitherWay(supabase, fromId, toId);
+  } catch (error) {
+    console.error('rating block lookup error:', error);
+    return err('fetch_failed', 500);
+  }
+  if (blocked) return err('user_blocked', 403);
 
   // canRate: conversation prerequisite
-  const { data: convResult } = await supabase.rpc('had_conversation', {
+  const { data: convResult, error: convErr } = await supabase.rpc('had_conversation', {
     id1: fromId,
     id2: toId,
   });
-  if (!convResult) return err('no_chat', 403);
+  if (convErr) return err('fetch_failed', 500);
 
   // canRate: 24h cooldown — fast app-level check (DB trigger is the final guard)
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: recentRate } = await supabase
+  const { data: recentRate, error: recentErr } = await supabase
     .from('rate_log')
     .select('id')
     .eq('from', fromId)
@@ -131,7 +140,13 @@ Deno.serve(async (req: Request) => {
     .gt('date', dayAgo)
     .maybeSingle();
 
-  if (recentRate) return err('24h_limit', 429);
+  if (recentErr) return err('fetch_failed', 500);
+  const eligibility = canRate(fromId, toId, {
+    blockedPeerIds: new Set(),
+    conversationPartnerIds: new Set(convResult ? [toId] : []),
+    recentlyRatedIds: new Set(recentRate ? [toId] : []),
+  });
+  if (!eligibility.ok) return err(eligibility.reason, eligibility.reason === '24h_limit' ? 429 : 403);
 
   // ── Weight ───────────────────────────────────────────────────────────────────
 
@@ -141,10 +156,11 @@ Deno.serve(async (req: Request) => {
   else if (raterCred < 15) credWeight = 0.7;
   else                     credWeight = 1.0;
 
-  const { data: timesRatedResult } = await supabase.rpc('get_times_rated', {
+  const { data: timesRatedResult, error: timesRatedErr } = await supabase.rpc('get_times_rated', {
     from_id: fromId,
     to_id:   toId,
   });
+  if (timesRatedErr) return err('fetch_failed', 500);
   const timesRated  = Number(timesRatedResult ?? 0);
   const repeatDecay = Math.max(0.2, Math.pow(0.8, timesRated));
   const weight      = parseFloat((credWeight * repeatDecay).toFixed(3));
@@ -154,9 +170,10 @@ Deno.serve(async (req: Request) => {
   const baseDelta = SCORE_DELTA[score];
   const rawDelta  = parseFloat((baseDelta * weight).toFixed(2));
 
-  const { data: dailyUsedResult } = await supabase.rpc('get_daily_cred_change', {
+  const { data: dailyUsedResult, error: dailyUsedErr } = await supabase.rpc('get_daily_cred_change', {
     target_id: toId,
   });
+  if (dailyUsedErr) return err('fetch_failed', 500);
   const dailyUsed = Number(dailyUsedResult ?? 0);
   const remaining = MAX_DAILY_CHANGE - dailyUsed;
 
@@ -200,5 +217,10 @@ Deno.serve(async (req: Request) => {
     date:           new Date().toISOString(),
   };
 
-  return ok({ entry, newCred: Number(newCred) });
-});
+  return ok({
+    entry,
+    newCred: Number(newCred),
+    credLevel: getCredLevel(Number(newCred)),
+    credProgress: getCredProgress(Number(newCred)),
+  });
+}));

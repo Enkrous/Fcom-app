@@ -47,6 +47,21 @@ Current files in `supabase/migrations`:
 - `20260827120000_028_user_safety_reports_blocks.sql`
 - `20260828120000_029_reports_abuse_hardening.sql`
 - `20260829120000_030_report_target_message.sql`
+- `20261014120000_031_account_deletion_preserve_groups.sql`
+- `20261014121000_032_service_only_application_access.sql`
+- `20261014123000_033_atomic_report_rate_limit.sql`
+- `20261014124000_034_image_caption_constraint.sql`
+- `20261014181601_035_device_tokens.sql`
+- `20261014190000_036_variable_apns_token_length.sql`
+- `20261014191050_037_finalize_media_upload.sql`
+
+For the iOS API release and exact verified/pending state, see
+[`docs/backend-release-2026-10-14.md`](docs/backend-release-2026-10-14.md).
+Apply migrations before deploying the corresponding functions. Redeploy all
+21 functions when shared helpers change; Fcom JWTs require `verify_jwt=false`.
+Production migration timestamps differ from local files; read
+[`docs/migration-history-2026-10-14.md`](docs/migration-history-2026-10-14.md)
+before using CLI migration commands. Do not replay already applied SQL.
 
 Do not deploy or repair `20260523120000_026_unify_all_users_into_fiztex.sql` unless the project explicitly decides to merge all production users into `Fiztex`. It is a data migration, not part of the current safe deployment path.
 
@@ -69,6 +84,7 @@ supabase functions deploy me
 supabase functions deploy messages
 supabase functions deploy rate
 supabase functions deploy register
+supabase functions deploy register-push
 supabase functions deploy reject
 supabase functions deploy report-user
 supabase functions deploy reports-admin

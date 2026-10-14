@@ -1,10 +1,10 @@
-import { ok, err, corsPrelight }     from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 
 const MAX_BYTES = 6 * 1024 * 1024;
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -47,17 +47,48 @@ Deno.serve(async (req: Request) => {
   const ext = getExtension(file.type, file.name);
   const path = `${caller.id}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
 
-  const { error: uploadErr } = await supabase.storage
-    .from('chat-media')
-    .upload(path, file, {
-      upsert: false,
-      contentType: file.type,
-      cacheControl: '3600',
-    });
+  let uploadErr: unknown;
+  try {
+    const result = await supabase.storage.from('chat-media').upload(path, file, {
+        upsert: false,
+        contentType: file.type,
+        cacheControl: '3600',
+      });
+    uploadErr = result.error;
+  } catch (error) {
+    uploadErr = error;
+  }
 
   if (uploadErr) {
     console.error('chat media upload error:', uploadErr);
+    // A lost Storage response can hide an already committed object. Its fresh
+    // unpublished path is safe to discard even when upload success is unknown.
+    await discardUnpublishedUpload(supabase, path);
     return err('upload_failed', 500);
+  }
+
+  let finalized: unknown;
+  let finalizeError: unknown;
+  try {
+    const result = await supabase.rpc('finalize_chat_media_upload', {
+      p_user_id: caller.id,
+      p_path: path,
+    });
+    finalized = result.data;
+    finalizeError = result.error;
+  } catch (error) {
+    finalizeError = error;
+  }
+  if (finalizeError || typeof finalized !== 'boolean') {
+    console.error('chat media finalization error:', finalizeError);
+    await discardUnpublishedUpload(supabase, path);
+    return err('upload_failed', 500);
+  }
+  if (!finalized) {
+    // Deletion cascaded the caller's sessions. Do not publish a successful
+    // upload for the vanished account, even if its original JWT was valid.
+    await discardUnpublishedUpload(supabase, path);
+    return err('session_revoked', 401);
   }
 
   return ok({
@@ -69,7 +100,40 @@ Deno.serve(async (req: Request) => {
       height,
     },
   });
-});
+}));
+
+// This UUID path belongs to the just-completed upload and has never been
+// published to the caller. Queue first, then remove only that new object.
+// Cleanup failures keep the durable queue entry for the protected cron job.
+async function discardUnpublishedUpload(
+  supabase: ReturnType<typeof getServiceClient>,
+  path: string,
+): Promise<void> {
+  try {
+    const { error } = await supabase.from('chat_media_cleanup_queue')
+      .upsert({ path }, { onConflict: 'path' });
+    if (error) console.warn('unpublished media queue error:', error);
+  } catch (error) {
+    console.warn('unpublished media queue error:', error);
+  }
+  try {
+    const { error } = await supabase.storage.from('chat-media').remove([path]);
+    if (error) {
+      console.warn('unpublished media removal error:', error);
+      return;
+    }
+  } catch (error) {
+    console.warn('unpublished media removal error:', error);
+    return;
+  }
+  try {
+    const { error } = await supabase.from('chat_media_cleanup_queue')
+      .delete().eq('path', path);
+    if (error) console.warn('unpublished media queue acknowledge error:', error);
+  } catch (error) {
+    console.warn('unpublished media queue acknowledge error:', error);
+  }
+}
 
 function getExtension(mime: string, fallbackName: string): string {
   if (mime === 'image/jpeg') return 'jpg';

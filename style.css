@@ -1212,6 +1212,11 @@ select:focus {
   margin: 0 auto;
 }
 
+.settings-blocked-card .card-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .admin-stat-card {
   padding: 18px 20px;
   border-radius: 22px;

@@ -13,11 +13,11 @@
  *  7. Return { ok: true } (or { ok: true, _devOtp } in dev mode)
  */
 
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -96,4 +96,4 @@ Deno.serve(async (req: Request) => {
   // In dev mode return OTP in response (no SMS provider configured)
   const isDev = !smsUrl;
   return ok(isDev ? { _devOtp: code } : {});
-});
+}));

@@ -12,10 +12,11 @@
  * Response: { ok: true, deleted: { sessions, otp, rateLimitLog } }
  */
 
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
+import { cleanupQueuedChatMedia } from '../_shared/media_cleanup.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -43,11 +44,19 @@ Deno.serve(async (req: Request) => {
   if (otpErr)  console.error('cleanup_expired_otp error:', otpErr);
   if (rlErr)   console.error('cleanup_rate_limit_log error:', rlErr);
 
+  let chatMedia = 0;
+  try {
+    chatMedia = await cleanupQueuedChatMedia(supabase);
+  } catch (error) {
+    console.warn('queued chat media cleanup error:', error);
+  }
+
   return ok({
     deleted: {
       sessions:     Number(deletedSessions ?? 0),
       otp:          Number(deletedOtp      ?? 0),
       rateLimitLog: Number(deletedRl       ?? 0),
+      chatMedia,
     },
   });
-});
+}));

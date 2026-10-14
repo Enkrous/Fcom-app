@@ -3,6 +3,13 @@ Generated: 2026-06-01
 Source: credo.js, api.js
 Load order: credo.js -> api.js -> app.js
 
+NOTICE (2026-10-14): This is a historical client-source snapshot, not the current
+HTTP API contract. The Swift/web wire contract for all 20 Edge Functions is
+maintained in docs/api-contract.md. Use that document for methods, request/response
+models, nullability, authorization and every implemented error/status code.
+Do not derive server responses from the JavaScript wrappers below: wrappers may
+merge login results or create local-only errors which do not exist on the wire.
+
 ================================================================================
 FILE: credo.js
 ================================================================================

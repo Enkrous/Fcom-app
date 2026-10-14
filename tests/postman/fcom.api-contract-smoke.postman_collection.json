@@ -1,0 +1,894 @@
+{
+  "info": {
+    "_postman_id": "fcom-api-contract-smoke-20261014",
+    "name": "Fcom — Swift API Contract Smoke (local / disposable staging)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run against local/disposable staging, or an explicitly authorized isolated production fixture namespace using the same seven-id/prefix guard as the main collection. Production requires allow_production_fixtures=true and test_environment=isolated-production-fixtures. Apply required repository migrations and deploy the repository Edge Functions with verify_jwt=false and custom JWT_SECRET. Set base_url; for a hosted disposable staging project explicitly set test_environment=disposable-staging. Supply a disposable approved caller and a same-school partner (local defaults bob/testpass and alice UUID). The collection reads messages, removes only caller-owned stale blocks, registers one unique pending account without phone/SMS, sets its password, verifies its identity, deletes ONLY that account and checks all captured tokens are revoked. No service-role or JWT signing secret is embedded; use only the generated fixture credentials. The original seed accounts are not deletion targets. Run all requests in order; do not stop between registration and deletion. A failed run may leave its dedicated postman_delete_* account for manual cleanup. This is a wire-contract smoke test; SQL suites cover transactional group transfer and retained media."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:54321/functions/v1"
+    },
+    {
+      "key": "test_environment",
+      "value": "local"
+    },
+    {
+      "key": "smoke_nickname",
+      "value": "bob"
+    },
+    {
+      "key": "smoke_password",
+      "value": "testpass"
+    },
+    {
+      "key": "smoke_partner_id",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "smoke_stale_target_id",
+      "value": "00000000-0000-0000-0000-000000000005"
+    },
+    {
+      "key": "allow_production_fixtures",
+      "value": "false"
+    },
+    {
+      "key": "fcom_fixture_prefix",
+      "value": ""
+    },
+    {
+      "key": "fixture_user_ids",
+      "value": "[]"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "(() => {",
+          "function abortRequest(message) {",
+          "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+          "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+          "  throw new Error(message);",
+          "}",
+          "const mode = pm.variables.get('test_environment');",
+          "const base = String(pm.variables.get('base_url') || '');",
+          "const productionRun = mode === 'isolated-production-fixtures';",
+          "if (!['local','disposable-staging','isolated-production-fixtures'].includes(mode)) abortRequest('Select local, disposable-staging or explicitly authorized isolated-production-fixtures.');",
+          "const authority = (base.split('://')[1] || '').split('/')[0].toLowerCase();",
+          "const hostname = authority.startsWith('[') ? authority.slice(0, authority.indexOf(']') + 1) : authority.split(':')[0];",
+          "if (mode === 'local' && (!['http','https'].includes(base.split('://')[0]) || !['localhost','127.0.0.1','[::1]'].includes(hostname))) abortRequest('local mode requires a loopback URL.');",
+          "if (mode !== 'local' && !base.startsWith('https://')) abortRequest('Hosted fixture tests require HTTPS.');",
+          "const requestName = pm.info.requestName || '';",
+          "const intentionalBadJwt = pm.request.method === 'GET' && (requestName.startsWith('S-03 ') || requestName.startsWith('S-05 '));",
+          "if (/vzjlhiqvfgrrlfdgyebx/i.test(base) && !productionRun) abortRequest('Production requires isolated-production-fixtures and the explicit fixture flag.');",
+          "if (productionRun) {",
+          "  const prefix = pm.variables.get('fcom_fixture_prefix');",
+          "  if (String(pm.variables.get('allow_production_fixtures')) !== 'true' || !/^postman_[a-f0-9]{12}$/.test(prefix || '')) abortRequest('Production tests require allow_production_fixtures=true and a newly generated postman_<12hex> prefix.');",
+          "  let ids; try { ids = JSON.parse(pm.variables.get('fixture_user_ids')); } catch { abortRequest('fixture_user_ids must be the generated seven-id allowlist.'); }",
+          "  if (!Array.isArray(ids) || ids.length !== 7 || new Set(ids).size !== 7 || ids.some(id => !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id) || /^00000000-0000-0000-0000-/.test(id))) abortRequest('Production fixture ids must be seven distinct newly generated UUIDs, never seed ids.');",
+          "  ['alice','bob','carol','dave','eve','frank','grace'].forEach(name => { if (!ids.includes(pm.variables.get(name + '_id')) || !String(pm.variables.get(name + '_nickname')).startsWith(prefix + '_')) abortRequest('Every named actor must be an isolated fixture.'); });",
+          "  const actualUrl = pm.variables.replaceIn(String(pm.request.url));",
+          "  if (actualUrl.includes('/rest/v1/') && !String(pm.variables.get('supabase_url')).startsWith('https://')) abortRequest('Production PostgREST checks require the configured HTTPS fixture project.');",
+          "  const captured = ['new_user_id','phone_user_id','first_school_user_id','reject_user_id'].map(key => pm.variables.get(key)).filter(Boolean);",
+          "  const allowed = new Set(ids.concat(captured));",
+          "  const auth = pm.variables.replaceIn(pm.request.headers.get('Authorization') || '');",
+          "  if (auth.startsWith('Bearer ') && !String(pm.request.url).includes('/rest/v1/')) {",
+          "    const jwtBuffer = require('buffer').Buffer; let subject; try { subject = JSON.parse(jwtBuffer.from(auth.slice(7).split('.')[1], 'base64').toString('utf8')).sub; } catch {}",
+          "    if (!intentionalBadJwt && subject && !allowed.has(subject) && subject !== pm.collectionVariables.get('contract_disposable_id')) abortRequest('Bearer actor is outside the isolated fixture allowlist.');",
+          "  }",
+          "  let body; try { body = JSON.parse(pm.variables.replaceIn(pm.request.body && pm.request.body.raw || '{}')); } catch {}",
+          "  if (body && !requestName.startsWith('SC-07 ') && !requestName.startsWith('SC-08 ')) {",
+          "    if (body.groupId && (body.groupId !== pm.variables.get('group_id') || body.groupId !== pm.variables.get('group_fixture_verified'))) abortRequest('Group mutation must target the private group created and verified in this run.');",
+          "    if (body.inviteId && ![pm.variables.get('bob_invite_id'),pm.variables.get('carol_invite_id')].includes(body.inviteId)) abortRequest('Invite mutation must target a captured fixture invite.');",
+          "    if (body.reportId && body.reportId !== pm.variables.get('report_fixture_verified')) abortRequest('Report mutation must target the report created between fixture users.');",
+          "    ['userId','targetId','toId','fromUserId','createdBy','invitedBy','invitedUserId','reporterId','blockerId','blockedId'].forEach(key => { if (body[key] && !allowed.has(body[key]) && body[key] !== pm.variables.get('missing_user_id') && body[key] !== pm.collectionVariables.get('contract_missing_id')) abortRequest('Mutation target is outside the isolated fixture allowlist.'); });",
+          "    if (Array.isArray(body.memberIds) && body.memberIds.some(id => !allowed.has(id))) abortRequest('Group invitees must be fixture users.');",
+          "    if (String(pm.request.url).includes('/register') && !String(pm.request.url).includes('/register-push') && ((body.nickname && !body.nickname.toLowerCase().startsWith(prefix + '_')) || (body.fullName && !body.fullName.toLowerCase().includes(prefix)))) abortRequest('Registration must use the generated fixture namespace.');",
+          "    if (String(pm.request.url).includes('/verify-phone') || String(pm.request.url).includes('/resend-otp')) { const phones = ['new_phone','bob_phone','dave_phone','unknown_phone'].map(key => pm.variables.get(key)); if (!phones.includes(body.phone)) abortRequest('OTP requests must use fixture phone values.'); }",
+          "  }",
+          "}",
+          "})();"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "SC-01 Login a disposable approved fixture",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nickname\":\"{{smoke_nickname}}\",\"password\":\"{{smoke_password}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "['contract_token','contract_caller_id'].forEach(key => pm.collectionVariables.unset(key));",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-01 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "pm.test('SC-01 approved caller and token', () => { pm.expect(r.user.status).to.equal('approved'); pm.expect(r.token).to.be.a('string').and.not.empty; });",
+              "if (r.ok && r.token && r.user.status === 'approved') { pm.collectionVariables.set('contract_token', r.token); pm.collectionVariables.set('contract_caller_id', r.user.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-02 Me returns server Credo",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/me",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-02 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "function assertCredo(user) {",
+              "  pm.expect(user.cred).to.be.a('number');",
+              "  pm.expect(user.credLevel).to.be.an('object');",
+              "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+              "  pm.expect(user.credLevel.min).to.be.a('number');",
+              "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+              "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+              "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+              "}",
+              "pm.test('SC-02 server Credo', () => assertCredo(r.user));",
+              "pm.test('SC-02 current identity', () => pm.expect(r.user.id).to.equal(pm.collectionVariables.get('contract_caller_id')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-03 Directory eligibility snapshot",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/users",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "function assertCredo(user) {",
+              "  pm.expect(user.cred).to.be.a('number');",
+              "  pm.expect(user.credLevel).to.be.an('object');",
+              "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+              "  pm.expect(user.credLevel.min).to.be.a('number');",
+              "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+              "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+              "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+              "}",
+              "pm.test('Directory HTTP 200 and arrays', () => {",
+              "  pm.expect(pm.response.code).to.equal(200);",
+              "  pm.expect(r.ok).to.be.true;",
+              "  ['users','pending','usersToRate'].forEach(key => pm.expect(r[key]).to.be.an('array'));",
+              "});",
+              "pm.test('Directory approved entries have server Credo and eligibility', () => {",
+              "  r.users.forEach(user => {",
+              "    assertCredo(user);",
+              "    pm.expect(user.status).to.equal('approved');",
+              "    pm.expect(user.phone).to.be.undefined;",
+              "    pm.expect(user.canRate).to.be.an('object');",
+              "    pm.expect(user.canRate.ok).to.be.a('boolean');",
+              "    if (user.canRate.ok) pm.expect(user.canRate.reason).to.be.undefined;",
+              "    else pm.expect(['no_chat','24h_limit']).to.include(user.canRate.reason);",
+              "  });",
+              "});",
+              "pm.test('Directory pending entries have server Credo and no eligibility', () => {",
+              "  r.pending.forEach(user => {",
+              "    assertCredo(user);",
+              "    pm.expect(user.status).to.equal('pending');",
+              "    pm.expect(user.phone).to.be.undefined;",
+              "    pm.expect(user.canRate).to.be.undefined;",
+              "  });",
+              "});",
+              "pm.test('usersToRate equals eligible users in this response', () => {",
+              "  const eligible = r.users.filter(user => user.canRate.ok).map(user => user.id).sort();",
+              "  pm.expect(r.usersToRate.map(user => user.id).sort()).to.deep.equal(eligible);",
+              "  r.usersToRate.forEach(user => {",
+              "    assertCredo(user);",
+              "    pm.expect(user.canRate.ok).to.be.true;",
+              "    const listed = r.users.find(candidate => candidate.id === user.id);",
+              "    pm.expect(user).to.deep.equal(listed);",
+              "  });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-04 Only rate targets",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/users?rateTargets=true",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "function assertCredo(user) {",
+              "  pm.expect(user.cred).to.be.a('number');",
+              "  pm.expect(user.credLevel).to.be.an('object');",
+              "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+              "  pm.expect(user.credLevel.min).to.be.a('number');",
+              "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+              "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+              "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+              "}",
+              "pm.test('Directory HTTP 200 and arrays', () => {",
+              "  pm.expect(pm.response.code).to.equal(200);",
+              "  pm.expect(r.ok).to.be.true;",
+              "  ['users','pending','usersToRate'].forEach(key => pm.expect(r[key]).to.be.an('array'));",
+              "});",
+              "pm.test('Directory approved entries have server Credo and eligibility', () => {",
+              "  r.users.forEach(user => {",
+              "    assertCredo(user);",
+              "    pm.expect(user.status).to.equal('approved');",
+              "    pm.expect(user.phone).to.be.undefined;",
+              "    pm.expect(user.canRate).to.be.an('object');",
+              "    pm.expect(user.canRate.ok).to.be.a('boolean');",
+              "    if (user.canRate.ok) pm.expect(user.canRate.reason).to.be.undefined;",
+              "    else pm.expect(['no_chat','24h_limit']).to.include(user.canRate.reason);",
+              "  });",
+              "});",
+              "pm.test('Directory pending entries have server Credo and no eligibility', () => {",
+              "  r.pending.forEach(user => {",
+              "    assertCredo(user);",
+              "    pm.expect(user.status).to.equal('pending');",
+              "    pm.expect(user.phone).to.be.undefined;",
+              "    pm.expect(user.canRate).to.be.undefined;",
+              "  });",
+              "});",
+              "pm.test('usersToRate equals eligible users in this response', () => {",
+              "  const eligible = r.users.filter(user => user.canRate.ok).map(user => user.id).sort();",
+              "  pm.expect(r.usersToRate.map(user => user.id).sort()).to.deep.equal(eligible);",
+              "  r.usersToRate.forEach(user => {",
+              "    assertCredo(user);",
+              "    pm.expect(user.canRate.ok).to.be.true;",
+              "    const listed = r.users.find(candidate => candidate.id === user.id);",
+              "    pm.expect(user).to.deep.equal(listed);",
+              "  });",
+              "});",
+              "pm.test('SC-04 filtered users equal usersToRate', () => pm.expect(r.users).to.deep.equal(r.usersToRate));",
+              "pm.test('SC-04 every returned user can be rated', () => r.users.forEach(user => pm.expect(user.canRate.ok).to.be.true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-05 Messages keep string sender id and deletion flag",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/messages?partnerId={{smoke_partner_id}}&limit=10",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-05 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "pm.test('SC-05 response shape', () => { pm.expect(r.messages).to.be.an('array'); pm.expect(r.hasMore).to.be.a('boolean'); pm.expect(r.markedRead).to.be.a('number'); });",
+              "pm.test('SC-05 compatible sender metadata', () => r.messages.forEach(message => { pm.expect(message.fromId).to.be.a('string'); pm.expect(message.senderDeleted).to.be.a('boolean'); pm.expect(message.deletedFromId).to.be.undefined; }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-06 Unblock a rejected or moved fixture",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/block-user",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"targetId\":\"{{smoke_stale_target_id}}\",\"action\":\"unblock\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-06 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "pm.test('SC-06 stale outgoing block removed', () => { pm.expect(r.action).to.equal('unblock'); pm.expect(r.targetId).to.equal(pm.variables.get('smoke_stale_target_id')); pm.expect(r.blocks.some(block => block.blockedId === r.targetId)).to.be.false; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-07 Unblock a missing id is idempotent",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/block-user",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"targetId\":\"{{contract_missing_id}}\",\"action\":\"unblock\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "pm.variables.set('contract_missing_id', pm.variables.replaceIn('{{$guid}}'));",
+              "pm.collectionVariables.set('contract_missing_id', pm.variables.get('contract_missing_id'));",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-07 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "pm.test('SC-07 missing target has no outgoing block', () => { pm.expect(r.targetId).to.equal(pm.collectionVariables.get('contract_missing_id')); pm.expect(r.blocks.some(block => block.blockedId === r.targetId)).to.be.false; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-08 Register the account this run is allowed to delete",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/register",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fullName\":\"{{contract_disposable_name}}\",\"school\":\"{{contract_disposable_school}}\",\"grade\":\"1\",\"nickname\":\"{{contract_disposable_nickname}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "['contract_disposable_id','contract_disposable_token','contract_disposable_verified'].forEach(key => pm.collectionVariables.unset(key));",
+              "const suffix = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
+              "const values = { contract_disposable_nickname: (pm.variables.get('fcom_fixture_prefix') || 'postman') + '_delete_' + suffix, contract_disposable_name: 'Postman Delete ' + (pm.variables.get('fcom_fixture_prefix') || 'local') + ' ' + suffix, contract_disposable_school: 'Postman Delete School ' + suffix, contract_disposable_password: 'Postman-' + suffix };",
+              "Object.keys(values).forEach(key => { pm.collectionVariables.set(key, values[key]); pm.variables.set(key, values[key]); });",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-08 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "pm.test('SC-08 newly generated pending identity/token', () => { pm.expect(r.user.status).to.equal('pending'); pm.expect(r.user.nickname).to.equal(pm.collectionVariables.get('contract_disposable_nickname')); pm.expect(r.user.fullName).to.equal(pm.collectionVariables.get('contract_disposable_name')); pm.expect(r.token).to.be.a('string').and.not.empty; });",
+              "if (r.ok && r.token && r.user.nickname === pm.collectionVariables.get('contract_disposable_nickname')) { pm.collectionVariables.set('contract_disposable_id', r.user.id); pm.collectionVariables.set('contract_disposable_token', r.token); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-09 Verify disposable identity and Credo before deletion",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/me",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_disposable_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_disposable_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-09 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "function assertCredo(user) {",
+              "  pm.expect(user.cred).to.be.a('number');",
+              "  pm.expect(user.credLevel).to.be.an('object');",
+              "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+              "  pm.expect(user.credLevel.min).to.be.a('number');",
+              "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+              "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+              "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+              "}",
+              "pm.test('SC-09 freshly created account', () => { pm.expect(r.user.id).to.equal(pm.collectionVariables.get('contract_disposable_id')); pm.expect(r.user.nickname).to.equal(pm.collectionVariables.get('contract_disposable_nickname')); pm.expect(r.user.fullName).to.equal(pm.collectionVariables.get('contract_disposable_name')); pm.expect(r.user.status).to.equal('pending'); assertCredo(r.user); });",
+              "if (r.ok && r.user.id === pm.collectionVariables.get('contract_disposable_id') && r.user.nickname === pm.collectionVariables.get('contract_disposable_nickname')) pm.collectionVariables.set('contract_disposable_verified', r.user.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-10 Set password on the dedicated pending account",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/set-password",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_disposable_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"password\":\"{{contract_disposable_password}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_disposable_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "const createdId = pm.collectionVariables.get('contract_disposable_id');",
+              "const nickname = pm.collectionVariables.get('contract_disposable_nickname');",
+              "if (pm.collectionVariables.get('contract_disposable_verified') !== createdId || !/^postman(?:_[a-f0-9]{12})?_delete_[a-f0-9]+$/.test(nickname || '')) abortRequest('Deletion requires the freshly registered and /me-verified disposable account.');",
+              "if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(createdId || '') || /^00000000-0000-0000-0000-/.test(createdId)) abortRequest('A seed or invalid user id cannot be deleted.');",
+              "const seededIds = ['alice_id','bob_id','carol_id','dave_id','eve_id','frank_id','grace_id'].map(key => pm.variables.get(key));",
+              "if (seededIds.includes(createdId) || createdId === pm.collectionVariables.get('contract_caller_id')) abortRequest('A preexisting test account cannot be deleted.');",
+              "const jwtBuffer = require('buffer').Buffer;",
+              "let subject; try { subject = JSON.parse(jwtBuffer.from(capturedToken.split('.')[1], 'base64').toString('utf8')).sub; } catch { abortRequest('Disposable token has an invalid payload.'); }",
+              "if (subject !== createdId) abortRequest('Disposable token subject must match the freshly created account.');",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-10 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-11 Delete ONLY the newly created account",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/delete-account",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_disposable_token}}"
+          }
+        ],
+        "description": "No target user id is sent. A prerequest guard verifies the captured JWT subject against the unique account registered and /me-checked in SC-08/SC-09; seed ids and the approved caller are refused."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_disposable_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "const createdId = pm.collectionVariables.get('contract_disposable_id');",
+              "const nickname = pm.collectionVariables.get('contract_disposable_nickname');",
+              "if (pm.collectionVariables.get('contract_disposable_verified') !== createdId || !/^postman(?:_[a-f0-9]{12})?_delete_[a-f0-9]+$/.test(nickname || '')) abortRequest('Deletion requires the freshly registered and /me-verified disposable account.');",
+              "if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(createdId || '') || /^00000000-0000-0000-0000-/.test(createdId)) abortRequest('A seed or invalid user id cannot be deleted.');",
+              "const seededIds = ['alice_id','bob_id','carol_id','dave_id','eve_id','frank_id','grace_id'].map(key => pm.variables.get(key));",
+              "if (seededIds.includes(createdId) || createdId === pm.collectionVariables.get('contract_caller_id')) abortRequest('A preexisting test account cannot be deleted.');",
+              "const jwtBuffer = require('buffer').Buffer;",
+              "let subject; try { subject = JSON.parse(jwtBuffer.from(capturedToken.split('.')[1], 'base64').toString('utf8')).sub; } catch { abortRequest('Disposable token has an invalid payload.'); }",
+              "if (subject !== createdId) abortRequest('Disposable token subject must match the freshly created account.');",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-11 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+              "pm.test('SC-11 deletes exactly the registered id', () => pm.expect(r.deletedUserId).to.equal(pm.collectionVariables.get('contract_disposable_id')));",
+              "if (r.ok && r.deletedUserId === pm.collectionVariables.get('contract_disposable_id')) pm.collectionVariables.unset('contract_disposable_verified');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-12 Deleted-account token is revoked",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/me",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_disposable_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_disposable_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-12 HTTP 401 / session_revoked', () => { pm.expect(pm.response.code).to.equal(401); pm.expect(r.ok).to.be.false; pm.expect(r.error).to.equal('session_revoked'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-13 Deleted account cannot log in",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nickname\":\"{{contract_disposable_nickname}}\",\"password\":\"{{contract_disposable_password}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-13 HTTP 401 / invalid_credentials', () => { pm.expect(pm.response.code).to.equal(401); pm.expect(r.ok).to.be.false; pm.expect(r.error).to.equal('invalid_credentials'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-14 Logout only the smoke caller session",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/logout",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-14 HTTP 200 / ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "SC-15 Logged-out token is revoked",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/me",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{contract_token}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(() => {",
+              "function abortRequest(message) {",
+              "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+              "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+              "  throw new Error(message);",
+              "}",
+              "const capturedToken = pm.collectionVariables.get('contract_token');",
+              "if (!capturedToken) abortRequest('Run this collection in order; no token was captured by its own setup.');",
+              "pm.request.headers.upsert({key:'Authorization',value:'Bearer ' + capturedToken});",
+              "})();"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.test('SC-15 HTTP 401 / session_revoked', () => { pm.expect(pm.response.code).to.equal(401); pm.expect(r.ok).to.be.false; pm.expect(r.error).to.equal('session_revoked'); });",
+              "['contract_token','contract_disposable_token','contract_disposable_password','contract_disposable_verified'].forEach(key => pm.collectionVariables.unset(key));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
