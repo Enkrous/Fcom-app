@@ -567,7 +567,7 @@ const App = (() => {
       Presence.startActivityTracking(user.id);
     }
 
-    const level = Credo.getCredLevel(user.cred);
+    const level = Credo.getUserCredLevel(user);
 
     // Приветствие
     $('#main-greeting').textContent = `Привет, ${user.nickname}`;
@@ -678,7 +678,7 @@ const App = (() => {
     }
 
     container.innerHTML = approved.map(({ user, messages, lastMessage }) => {
-      const level   = Credo.getCredLevel(user.cred);
+      const level   = Credo.getUserCredLevel(user);
       const msgs    = messages;
       const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1].text : 'Нет сообщений';
       const unread  = typeof Notif !== 'undefined'
@@ -897,7 +897,7 @@ const App = (() => {
     } else {
       membersEmpty.classList.add('hidden');
       membersList.innerHTML = members.map(u => {
-        const level = Credo.getCredLevel(u.cred);
+        const level = Credo.getUserCredLevel(u);
         return `
           <div class="card">
             <button class="profile-link-btn" type="button" data-open-member-profile="${escapeAttr(u.id)}">
@@ -1034,13 +1034,47 @@ const App = (() => {
     if (notifToggle) {
       notifToggle.checked = Credo.getNotificationsEnabled(user.id);
     }
+    renderBlockedUsers(user);
   }
 
-  function openSettings() {
+  function renderBlockedUsers(user) {
+    const list = $('#settings-blocked-list');
+    const empty = $('#settings-blocked-empty');
+    if (!list || !empty) return;
+    const blocks = Credo.getUserBlocks().filter((block) => block.blockerId === user.id);
+    empty.classList.toggle('hidden', blocks.length > 0);
+    list.innerHTML = blocks.map((block) => {
+      const target = block.user || Credo.getUserById(block.blockedId) || {};
+      return `
+        <div class="card settings-blocked-card">
+          ${Avatar.html({ seed: target.nickname || block.blockedId, imageUrl: target.avatarUrl || '' })}
+          <div class="card-body">
+            <div class="card-name">${escapeHtml(target.nickname ? '@' + target.nickname : 'Участник')}</div>
+            <div class="card-sub">${escapeHtml(target.fullName || '')}</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-outline btn-small" type="button" data-unblock-user="${escapeAttr(block.blockedId)}">Разблокировать</button>
+          </div>
+        </div>`;
+    }).join('');
+    list.querySelectorAll('[data-unblock-user]').forEach((button) => {
+      button.addEventListener('click', () => openSafetyModal(button.dataset.unblockUser, 'unblock'));
+    });
+  }
+
+  async function openSettings() {
     const user = Credo.getUserById(Credo.getCurrentUserId());
     if (!user) return;
     renderSettingsScreen(user);
     showScreen('settings');
+    if (typeof API !== 'undefined' && typeof API.refreshBlockedUsers === 'function') {
+      const status = $('#settings-blocked-status');
+      if (status) status.textContent = 'Обновляем список…';
+      const result = await API.refreshBlockedUsers({ force: true });
+      if (_currentScreen !== 'settings' || Credo.getCurrentUserId() !== user.id) return;
+      if (status) status.textContent = result?.ok ? '' : 'Не удалось обновить список. Откройте настройки ещё раз.';
+      renderBlockedUsers(user);
+    }
   }
 
   function closeSettings() {
@@ -1066,8 +1100,8 @@ const App = (() => {
     historyListId,
     historyEmptyId,
   }) {
-    const level = Credo.getCredLevel(user.cred);
-    const progress = Credo.getCredProgress(user.cred);
+    const level = Credo.getUserCredLevel(user);
+    const progress = Credo.getUserCredProgress(user);
 
     if (avatarId) {
       const avatarBox = $('#' + avatarId);
@@ -1442,7 +1476,12 @@ const App = (() => {
   }
 
   function openSafetyModal(userId, mode = 'report') {
-    const target = Credo.getUserById(userId);
+    const ownBlock = mode === 'unblock' ? Credo.getUserBlocks().find((block) =>
+      block.blockerId === Credo.getCurrentUserId() && block.blockedId === userId,
+    ) : null;
+    const target = Credo.getUserById(userId)
+      || ownBlock?.user
+      || (ownBlock ? { id: userId, nickname: '' } : null);
     if (!target) return;
 
     _safetyTargetUserId = userId;
@@ -1459,7 +1498,7 @@ const App = (() => {
 
     if (!modal || !title || !copy || !form || !primary || !targetName) return;
 
-    targetName.textContent = '@' + target.nickname;
+    targetName.textContent = target.nickname ? '@' + target.nickname : 'Участник';
     if (details) details.value = '';
     if (reason) reason.value = 'spam';
 
@@ -1473,7 +1512,7 @@ const App = (() => {
       const isUnblock = mode === 'unblock';
       title.textContent = isUnblock ? 'Разблокировать участника' : 'Заблокировать участника';
       copy.textContent = isUnblock
-        ? 'После разблокировки участник снова появится в списках и личные сообщения будут доступны.'
+        ? 'Ваша блокировка будет снята. Если участник тоже заблокировал вас, личные сообщения останутся недоступны.'
         : 'Участник исчезнет из личных списков, а прямые сообщения и оценки между вами будут недоступны.';
       primary.textContent = isUnblock ? 'Разблокировать' : 'Заблокировать';
       primary.className = isUnblock ? 'btn btn-primary' : 'btn btn-danger';
@@ -1685,7 +1724,7 @@ const App = (() => {
       return;
     }
 
-    const level = Credo.getCredLevel(partner.cred);
+    const level = Credo.getUserCredLevel(partner);
 
     $('#chat-partner-avatar').innerHTML = Avatar.html({
       seed: partner.nickname,
@@ -1823,7 +1862,8 @@ const App = (() => {
     container.innerHTML = msgs.map(m => {
       const isMine = m.from === myId;
       const timeStr = formatTime(m.time);
-      const sender = m.groupId
+      const senderDeleted = Boolean(m.groupId && (m.senderDeleted || !m.from));
+      const sender = m.groupId && !senderDeleted
         ? (Credo.getUserById(m.from)
           || (isMine ? Credo.getUserById(myId) : null)
           || _getGroupMemberIdentity(m.groupId, m.from))
@@ -1831,7 +1871,7 @@ const App = (() => {
       const showSender = Boolean(sender);
       return `
         <div class="msg ${escapeAttr(isMine ? 'sent' : 'received')}">
-          ${showSender ? `
+          ${senderDeleted ? '<div class="msg-author"><span class="msg-author-name">Удалённый пользователь</span></div>' : showSender ? `
             <div class="msg-author">
               <button class="msg-author-avatar-btn" type="button" data-open-user-profile="${escapeAttr(sender.id)}" title="Открыть профиль">
                 ${Avatar.html({ seed: sender.nickname, imageUrl: sender.avatarUrl || '', extraClass: 'msg-author-avatar' })}
@@ -2061,7 +2101,7 @@ const App = (() => {
     $('#rate-submit-btn').classList.remove('hidden');
 
     container.innerHTML = toRate.map(u => {
-      const level = Credo.getCredLevel(u.cred);
+      const level = Credo.getUserCredLevel(u);
       return `
         <div class="rate-card" data-rate-user="${escapeAttr(u.id)}">
           ${Avatar.html({ seed: u.nickname, imageUrl: u.avatarUrl || '' })}
@@ -2117,7 +2157,7 @@ const App = (() => {
     });
   }
 
-  function submitRatings() {
+  async function submitRatings() {
     const myId = Credo.getCurrentUserId();
     const entries = Object.entries(pendingRatings);
 
@@ -2126,10 +2166,27 @@ const App = (() => {
       return;
     }
 
-    let results = [];
-    for (const [toId, score] of entries) {
-      const res = Credo.rateUser(myId, toId, score);
-      results.push(res);
+    const button = $('#rate-submit-btn');
+    if (button) button.disabled = true;
+    const results = [];
+    try {
+      for (const [toId, score] of entries) {
+        const res = await Credo.rateUser(myId, toId, score);
+        results.push(res);
+      }
+    } finally {
+      if (button) button.disabled = false;
+    }
+    const failed = results.find((result) => !result?.ok);
+    if (failed) {
+      const messages = {
+        no_chat: 'Оценить участника можно после личной переписки.',
+        '24h_limit': 'Вы уже оценили этого участника за последние 24 часа.',
+        network_error: 'Не удалось отправить оценку. Проверьте подключение.',
+        fetch_failed: 'Не удалось проверить возможность оценки. Попробуйте позже.',
+        rate_failed: 'Не удалось сохранить оценку. Попробуйте позже.',
+      };
+      alert(messages[failed.error] || _safetyErrorMessage(failed.error));
     }
 
     pendingRatings = {};
@@ -2396,7 +2453,7 @@ const App = (() => {
     if (!user) return;
 
     const confirmed = confirm(
-      'Удалить аккаунт без возможности восстановления? Все сообщения, оценки и данные профиля будут удалены.'
+      'Удалить аккаунт без возможности восстановления? Профиль, личные сообщения и оценки будут удалены. Переписка групп останется у других участников.'
     );
     if (!confirmed) return;
 

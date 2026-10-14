@@ -299,7 +299,7 @@ const Credo = (() => {
 
   function getCredLevel(cred) {
     const c = Math.max(0, cred);
-    return LEVELS.find(l => c >= l.min && c <= l.max) || LEVELS[0];
+    return c >= 30 ? LEVELS[3] : c >= 15 ? LEVELS[2] : c >= 5 ? LEVELS[1] : LEVELS[0];
   }
 
   // Прогресс внутри текущего уровня (0..1), для шкалы
@@ -308,6 +308,18 @@ const Credo = (() => {
     if (c >= 30) return 1;
     // Шкала от 0 до 40 (визуально)
     return Math.min(c / 40, 1);
+  }
+
+  // Backend responses are authoritative; numeric helpers remain for demo data
+  // and compatibility with an older server during deployment.
+  function getUserCredLevel(user) {
+    return user?.credLevel || getCredLevel(user?.cred || 0);
+  }
+
+  function getUserCredProgress(user) {
+    return typeof user?.credProgress === 'number'
+      ? user.credProgress
+      : getCredProgress(user?.cred || 0);
   }
 
   // --------------- Регистрация ---------------
@@ -908,6 +920,8 @@ const Credo = (() => {
     // Уровни
     getCredLevel,
     getCredProgress,
+    getUserCredLevel,
+    getUserCredProgress,
     LEVELS,
 
     // Утилиты

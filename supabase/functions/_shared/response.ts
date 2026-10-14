@@ -43,3 +43,17 @@ export function err(error: string, status = 400): Response {
 export function corsPrelight(): Response {
   return new Response(null, { status: 204, headers: corsHeaders() });
 }
+
+/** Preserve the JSON envelope even when a database/helper throws. */
+export function withErrorHandling(
+  handler: (req: Request) => Promise<Response>,
+): (req: Request) => Promise<Response> {
+  return async (req) => {
+    try {
+      return await handler(req);
+    } catch (error) {
+      console.error('unhandled Edge Function error:', error);
+      return err('internal_error', 500);
+    }
+  };
+}

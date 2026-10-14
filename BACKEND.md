@@ -1,6 +1,6 @@
 # Fcom Backend Architecture
 
-This repository is a vanilla HTML/CSS/JS single page app backed by Supabase. It is not an iOS-native project.
+This repository contains a vanilla HTML/CSS/JS single page app backed by Supabase and an initial SwiftUI client under `ios/`. The SwiftUI scaffold requires a Mac/Xcode build before use.
 
 ## Frontend Shape
 
@@ -50,6 +50,7 @@ Current functions under `supabase/functions`:
 - `messages` - GET/POST direct and group messages, including image attachment metadata.
 - `rate` - POST credo rating.
 - `register` - POST registration; creates pending member and syncs school-public group membership.
+- `register-push` - POST register/unregister an iOS APNs token for an approved or pending user; service-only storage and best-effort notifications, enabled once Apple secrets are configured.
 - `reject` - POST reject a pending user; admin gated.
 - `report-user` - POST user safety report against an approved same-school target.
 - `reports-admin` - GET/POST admin report review flow.
@@ -100,7 +101,14 @@ Frontend safety operations use `API.reportUser`, `API.blockUser`, `API.unblockUs
 
 The MVP block contract is direct-user messaging only. Group membership and group message visibility are not filtered by pairwise blocks; expanding block enforcement to groups requires an explicit product decision and a separate access-control design.
 
-Account deletion is self-service from Settings. `delete-account` authenticates only the caller's JWT, removes private chat media on a best-effort basis, deletes sessions, and relies on the existing `ON DELETE CASCADE` relationships for messages, ratings, reports, blocks, groups, invites, OTPs, and approval records. The browser then removes the current account's local cache and tokens.
+Account deletion is self-service from Settings. Migration 031 and `delete-account` use a service-only transactional RPC: groups pass to the oldest remaining member, empty groups are deleted, direct messages and personal records are erased, and surviving group messages retain an opaque sender UUID plus `senderDeleted`. Group media is preserved; only orphaned media is queued for best-effort deletion and retry via `/cleanup`. The browser then removes the current account's local cache and tokens.
+
+The canonical native-client contract is [`docs/api-contract.md`](docs/api-contract.md).
+`/me`, `/users` and `/rate` add server Credo metadata; `/users` supplies rating
+eligibility and `usersToRate`. Backend-connected web clients use these decisions.
+Migration 032 closes direct access to every public application table, column,
+view, sequence and RPC for PUBLIC/anon/authenticated, including future default
+grants. Production verification remains required before marking the handoff done.
 
 ## RLS And Grants
 
@@ -143,7 +151,7 @@ Test assets currently present:
 - `tests/postman/fcom.postman_environment.json`
 - `tests/sql/group_table_security_checks.sql`
 
-The SQL regression check verifies RLS/grants for `chat_groups`, `group_members`, `group_invites`, `user_reports`, and `user_blocks`.
+The SQL regression check verifies RLS/grants on every public application table, including `chat_groups`, `group_members`, `group_invites`, `user_reports`, `user_blocks`, and `device_tokens`, plus column ACLs, views, sequences, RPCs and default privileges.
 
 ## Seed Data Warning
 

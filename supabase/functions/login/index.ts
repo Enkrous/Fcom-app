@@ -21,13 +21,13 @@
  * Errors:   see error table in BACKEND.md
  */
 
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
 import { signJWT }               from '../_shared/jwt.ts';
 import { verifyPassword }        from '../_shared/bcrypt.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -120,4 +120,4 @@ Deno.serve(async (req: Request) => {
   const { passwordHash: _omit, ...publicUser } = user;
 
   return ok({ token, user: publicUser });
-});
+}));

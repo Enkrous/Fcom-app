@@ -1,4 +1,4 @@
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient } from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 
@@ -40,7 +40,7 @@ type UserRow = {
   avatarUrl?: string | null;
 };
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (!['GET', 'POST'].includes(req.method)) return err('method_not_allowed', 405);
 
@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
 
   const serialized = await serializeReports(supabase, [updated as ReportRow]);
   return ok({ report: serialized[0] ?? updated });
-});
+}));
 
 async function loadReports(
   supabase: ReturnType<typeof getServiceClient>,

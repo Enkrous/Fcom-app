@@ -516,11 +516,23 @@
             <button id="settings-logout-btn" class="btn btn-danger btn-block" type="button">Выйти из аккаунта</button>
           </div>
 
+          <div class="pane-shell">
+            <div class="pane-head">
+              <div>
+                <h3>Заблокированные участники</h3>
+                <p class="subtitle">Участники, которых вы заблокировали. Здесь можно снять блокировку.</p>
+              </div>
+            </div>
+            <p id="settings-blocked-status" class="hint" role="status" aria-live="polite"></p>
+            <p id="settings-blocked-empty" class="hint">Вы никого не заблокировали.</p>
+            <div id="settings-blocked-list" class="card-list"></div>
+          </div>
+
           <div class="pane-shell settings-danger-zone">
             <div class="pane-head">
               <div>
                 <h3>Удаление аккаунта</h3>
-                <p class="subtitle">Удаляет профиль, сообщения, оценки, жалобы и серверные сессии без возможности восстановления.</p>
+                <p class="subtitle">Удаляет профиль, личные сообщения, оценки, жалобы и серверные сессии. История групп остаётся у участников; управление группой переходит самому старому участнику.</p>
               </div>
             </div>
             <button id="settings-delete-account-btn" class="btn btn-danger btn-block" type="button">Удалить аккаунт</button>

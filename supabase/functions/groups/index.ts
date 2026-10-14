@@ -1,11 +1,11 @@
-import { ok, err, corsPrelight }     from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { ensureSchoolPublicGroup, getGroupAccess } from '../_shared/groups.ts';
 import { isSameSchool } from '../_shared/school.ts';
 import { getBlockedPeerIds, hasUserBlock } from '../_shared/blocks.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
 
   const jwtSecret = Deno.env.get('JWT_SECRET');
@@ -346,4 +346,4 @@ Deno.serve(async (req: Request) => {
   }
 
   return err('unsupported_action');
-});
+}));

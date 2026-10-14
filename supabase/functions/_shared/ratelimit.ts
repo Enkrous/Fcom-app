@@ -33,8 +33,21 @@ export async function rateLimitDb(
   action: string,
   max: number,
   windowMs: number,
+  strict = false,
 ): Promise<boolean> {
   const bucketKey  = `${action}:${key}`;
+  if (strict) {
+    const { data, error } = await supabase.rpc('consume_rate_limit', {
+      p_key: bucketKey,
+      p_max: max,
+      p_window_ms: windowMs,
+    });
+    if (error || typeof data !== 'boolean') {
+      console.error('atomic rate limit unavailable:', error);
+      throw new Error('rate_limit_unavailable');
+    }
+    return data;
+  }
   const windowStart = new Date(Date.now() - windowMs).toISOString();
 
   try {

@@ -1,4 +1,4 @@
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient } from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
 import { rateLimitDb } from '../_shared/ratelimit.ts';
@@ -12,7 +12,7 @@ const REPORT_REASONS = new Set([
   'other',
 ]);
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -20,10 +20,6 @@ Deno.serve(async (req: Request) => {
   if (!jwtSecret) return err('server_misconfigured', 500);
 
   const supabase = getServiceClient();
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-  const allowed = await rateLimitDb(supabase, ip, 'reports', 5, 60 * 60_000);
-  if (!allowed) return err('rate_limit_exceeded', 429);
-
   let payload;
   try {
     payload = await requireAuthWithRevocation(req, jwtSecret, supabase);
@@ -39,6 +35,15 @@ Deno.serve(async (req: Request) => {
 
   if (!caller) return err('caller_not_found', 404);
   if (caller.status !== 'approved') return err('forbidden', 403);
+
+  // Authenticate first: school Wi-Fi users share an IP, but each account
+  // has its own quota. The database serializes concurrent quota checks.
+  try {
+    const allowed = await rateLimitDb(supabase, payload.sub, 'reports', 5, 60 * 60_000, true);
+    if (!allowed) return err('rate_limit_exceeded', 429);
+  } catch {
+    return err('rate_limit_unavailable', 503);
+  }
 
   let body: { targetId?: string; targetMessageId?: string; reason?: string; details?: string };
   try {
@@ -118,4 +123,4 @@ Deno.serve(async (req: Request) => {
   }
 
   return ok({ report });
-});
+}));

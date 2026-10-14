@@ -12,12 +12,12 @@
  *  5. Return { ok: true }
  */
 
-import { ok, err, corsPrelight }          from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }          from '../_shared/response.ts';
 import { getServiceClient }               from '../_shared/db.ts';
 import { requireAuthWithRevocation }      from '../_shared/jwt.ts';
 import { hashPassword }                   from '../_shared/bcrypt.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -67,4 +67,4 @@ Deno.serve(async (req: Request) => {
   }
 
   return ok();
-});
+}));

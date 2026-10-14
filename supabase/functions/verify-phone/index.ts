@@ -20,13 +20,13 @@
  * Error:    { "ok": false, "error": "..." }
  */
 
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
 
 const MAX_OTP_ATTEMPTS = 5; // wrong guesses before the OTP is hard-invalidated
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -123,7 +123,7 @@ Deno.serve(async (req: Request) => {
   }
 
   return ok({ userId: user.id });
-});
+}));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

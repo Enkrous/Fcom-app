@@ -18,14 +18,15 @@
  *  8. Return { ok: true, user, token, _devOtp? }
  */
 
-import { ok, err, corsPrelight } from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling } from '../_shared/response.ts';
 import { getServiceClient }      from '../_shared/db.ts';
 import { signJWT }               from '../_shared/jwt.ts';
 import { rateLimitDb }           from '../_shared/ratelimit.ts';
 import { ensureSchoolPublicGroup } from '../_shared/groups.ts';
 import { getCanonicalSchoolName, sanitizeSchoolName } from '../_shared/school.ts';
+import { queuePushForEvent } from '../_shared/push.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -167,12 +168,14 @@ Deno.serve(async (req: Request) => {
   // without a real SMS provider. Remove _devOtp before going to production.
   const isDev = !Deno.env.get('SMS_API_URL');
 
+  queuePushForEvent(supabase, { type: 'approval_request' });
+
   return ok({
     user,
     token,
     ...(isDev && otpCode ? { _devOtp: otpCode } : {}),
   });
-});
+}));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

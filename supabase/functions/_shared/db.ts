@@ -4,7 +4,7 @@
  * Service role bypasses RLS — all authorization is handled in Edge Function logic.
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.117.3';
 
 export function getServiceClient() {
   const url = Deno.env.get('SUPABASE_URL');

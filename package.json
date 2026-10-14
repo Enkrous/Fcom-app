@@ -1,0 +1,16 @@
+{
+  "name": "fcom-backend-checks",
+  "private": true,
+  "scripts": {
+    "test:sql": "node tests/run-sql.mjs",
+    "test:edge": "deno test --allow-env tests/credo_test.ts tests/edge",
+    "test:web": "node --test tests/web-safety-credo.test.mjs",
+    "test:guards": "node --test tests/postman_guard.test.mjs",
+    "test:postman": "newman run tests/postman/fcom.postman_collection.json -e tests/postman/fcom.postman_environment.json"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.9",
+    "newman": "6.2.3",
+    "pg": "8.23.1"
+  }
+}

@@ -2,13 +2,13 @@
   "info": {
     "_postman_id": "fcom-backend-tests-v1",
     "name": "Fcom Backend Tests",
-    "description": "Portable manual regression suite for Fcom backend - vanilla HTML/CSS/JS SPA plus Supabase Edge Functions.\n\nPrerequisites:\n1. Set `base_url` to the Edge Functions base URL.\n2. Apply the required Supabase migrations before running backend tests.\n3. Use seed.sql only in local/dev or disposable staging; never production.\n4. Leave SMS_API_URL empty for dev OTP mode, or adjust OTP tests for a real SMS provider.\n5. Set `supabase_url` and `supabase_anon_key` for direct PostgREST negative security checks.\n6. Use an approved admin token for admin folders. Auth Setup captures `admin_token` from `alice` only when `alice.role === \"admin\"`; otherwise set `admin_token` manually.\n7. For media upload, select a small local image file in MU-01 or set `media_file_path` in Postman.\n8. Run folders in order: Auth Setup -> Registration -> OTP Verification -> Set Password -> Login / Logout -> Approve / Reject -> Messages -> Credo Rating -> Groups -> Media Upload -> Safety Reports / Blocks -> Admin Stats -> Group and Safety Table Security -> Security.",
+    "description": "Portable manual regression suite for Fcom backend - vanilla HTML/CSS/JS SPA plus Supabase Edge Functions.\n\nPrerequisites:\n1. Set `base_url` to the Edge Functions base URL.\n2. Apply the required Supabase migrations before running backend tests.\n3. Use seed.sql only in local/dev or disposable staging; never production.\n4. Leave SMS_API_URL empty for dev OTP mode, or adjust OTP tests for a real SMS provider.\n5. Set `supabase_url` and `supabase_anon_key` for direct PostgREST negative security checks.\n6. Use an approved admin token for admin folders. Auth Setup captures `admin_token` from `alice` only when `alice.role === \"admin\"`; otherwise set `admin_token` manually.\n7. For media upload, select a small local image file in MU-01 or set `media_file_path` in Postman.\n8. Run folders in order: Auth Setup -> Registration -> OTP Verification -> Set Password -> Login / Logout -> Approve / Reject -> Messages -> Credo Rating -> Groups -> Media Upload -> Safety Reports / Blocks -> Admin Stats -> Group and Safety Table Security -> Security.\n\n2026-10-14 contract checks: server Credo/eligibility, senderDeleted metadata and stale-target unblocking. For self-service deletion use fcom.api-contract-smoke.postman_collection.json; it generates its own account and refuses the known production project. Existing seed accounts are never deletion targets.\n\nSAFETY: default URLs are local. Set test_environment=disposable-staging only for a disposable HTTPS staging project; production requires explicit allow_production_fixtures=true, an isolated fixture prefix and seven generated actor UUIDs. When running the full baseline collection with Newman, use --delay-request 13000 to respect registration 5/IP/minute; manual runners must pace registrations equivalently. Run smoke separately after the rate windows have reset. The PostgREST cases with Fcom app JWTs prove gateway denial only; authenticated-role ACL/RLS proof is tests/sql/group_table_security_checks.sql.\n\nProduction fixture runs are authorized only with test_environment=isolated-production-fixtures, allow_production_fixtures=true, fcom_fixture_prefix and fixture_user_ids from a new private fixture-spec. Every actor/target must be in that namespace; never reuse real accounts, App Review or seed IDs. Captured response variables are written to the environment scope to avoid shadowing. Phones are fixture-only reserved +999 values; do not run OTP folders if SMS is enabled without a safe provider/test-code retrieval plan. Full collection: use --delay-request 13000. Delete the isolated fixture namespace afterwards through the account deletion RPC; never seed/truncate production.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "https://vzjlhiqvfgrrlfdgyebx.supabase.co/functions/v1"
+      "value": "http://localhost:54321/functions/v1"
     },
     {
       "key": "alice_token",
@@ -68,7 +68,7 @@
     },
     {
       "key": "supabase_url",
-      "value": "https://vzjlhiqvfgrrlfdgyebx.supabase.co"
+      "value": "http://localhost:54321"
     },
     {
       "key": "supabase_anon_key",
@@ -145,6 +145,158 @@
     {
       "key": "report_id",
       "value": ""
+    },
+    {
+      "key": "test_environment",
+      "value": "local"
+    },
+    {
+      "key": "alice_nickname",
+      "value": "alice"
+    },
+    {
+      "key": "bob_nickname",
+      "value": "bob"
+    },
+    {
+      "key": "carol_nickname",
+      "value": "carol"
+    },
+    {
+      "key": "dave_nickname",
+      "value": "dave"
+    },
+    {
+      "key": "eve_nickname",
+      "value": "eve"
+    },
+    {
+      "key": "frank_nickname",
+      "value": "frank"
+    },
+    {
+      "key": "grace_nickname",
+      "value": "grace"
+    },
+    {
+      "key": "alice_nickname_upper",
+      "value": "ALICE"
+    },
+    {
+      "key": "alice_fullName_lower",
+      "value": "иванова алиса сергеевна"
+    },
+    {
+      "key": "bob_phone",
+      "value": "+79001000002"
+    },
+    {
+      "key": "dave_phone",
+      "value": "+79001000004"
+    },
+    {
+      "key": "unknown_phone",
+      "value": "+70000000000"
+    },
+    {
+      "key": "unknown_nickname",
+      "value": "nobody"
+    },
+    {
+      "key": "new_user_fullName",
+      "value": "Тестов Тест Тестович"
+    },
+    {
+      "key": "new_user_nickname",
+      "value": "testuser1"
+    },
+    {
+      "key": "new_user_school",
+      "value": "Школа №99"
+    },
+    {
+      "key": "phone_user_fullName",
+      "value": "Звонков Зинаида Зиновьевна"
+    },
+    {
+      "key": "phone_user_nickname",
+      "value": "zvonkova"
+    },
+    {
+      "key": "phone_user_school",
+      "value": "Школа №88"
+    },
+    {
+      "key": "first_user_fullName",
+      "value": "Первый Пользователь Новой Школы"
+    },
+    {
+      "key": "first_user_nickname",
+      "value": "firstschool777"
+    },
+    {
+      "key": "first_user_school",
+      "value": "Уникальная Школа №777"
+    },
+    {
+      "key": "reject_user_fullName",
+      "value": "Postman Reject Target {{$timestamp}}"
+    },
+    {
+      "key": "reject_user_nickname",
+      "value": "reject{{$timestamp}}"
+    },
+    {
+      "key": "validation_fullName",
+      "value": "Тест Тестов"
+    },
+    {
+      "key": "validation_nickname",
+      "value": "validation"
+    },
+    {
+      "key": "validation_school",
+      "value": "Школа"
+    },
+    {
+      "key": "duplicate_alice_fullName",
+      "value": "Другой Алиса"
+    },
+    {
+      "key": "duplicate_bob_fullName",
+      "value": "Другой Борис"
+    },
+    {
+      "key": "duplicate_bob_nickname",
+      "value": "notbob"
+    },
+    {
+      "key": "clone_nickname",
+      "value": "aliceclone"
+    },
+    {
+      "key": "missing_user_id",
+      "value": "00000000-0000-0000-0000-999999999999"
+    },
+    {
+      "key": "reject_fingerprint",
+      "value": "aabbcc112233445566778899aabbccddeeff0011"
+    },
+    {
+      "key": "group_fixture_name",
+      "value": "Postman Group {{$timestamp}}"
+    },
+    {
+      "key": "allow_production_fixtures",
+      "value": "false"
+    },
+    {
+      "key": "fcom_fixture_prefix",
+      "value": ""
+    },
+    {
+      "key": "fixture_user_ids",
+      "value": "[]"
     }
   ],
   "item": [
@@ -165,7 +317,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{alice_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -176,10 +328,10 @@
                   "const r = pm.response.json();",
                   "pm.test('alice login ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('alice is approved', () => pm.expect(r.user.status).to.equal('approved'));",
-                  "if (r.ok && r.token) pm.collectionVariables.set('alice_token', r.token);",
-                  "if (r.user && r.user.role === 'admin' && r.token) pm.collectionVariables.set('admin_token', r.token);",
-                  "if (r.user && r.user.id) pm.collectionVariables.set('alice_id', r.user.id);",
-                  "if (r.user && r.user.school) pm.collectionVariables.set('admin_school', r.user.school);",
+                  "if (r.ok && r.token) pm.environment.set('alice_token', r.token);",
+                  "if (r.user && r.user.role === 'admin' && r.token) pm.environment.set('admin_token', r.token);",
+                  "if (r.user && r.user.id) pm.environment.set('alice_id', r.user.id);",
+                  "if (r.user && r.user.school) pm.environment.set('admin_school', r.user.school);",
                   "if (r.user && r.user.role !== 'admin') console.warn('Set admin_token manually before admin/approval folders; alice is not admin in this environment.');"
                 ]
               }
@@ -199,7 +351,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{bob_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -209,8 +361,8 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('bob login ok', () => pm.expect(r.ok).to.be.true);",
-                  "if (r.ok && r.token) pm.collectionVariables.set('bob_token', r.token);",
-                  "if (r.user && r.user.id) pm.collectionVariables.set('bob_id', r.user.id);"
+                  "if (r.ok && r.token) pm.environment.set('bob_token', r.token);",
+                  "if (r.user && r.user.id) pm.environment.set('bob_id', r.user.id);"
                 ]
               }
             }
@@ -229,7 +381,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"carol\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{carol_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -239,8 +391,8 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('carol login ok', () => pm.expect(r.ok).to.be.true);",
-                  "if (r.ok && r.token) pm.collectionVariables.set('carol_token', r.token);",
-                  "if (r.user && r.user.id) pm.collectionVariables.set('carol_id', r.user.id);"
+                  "if (r.ok && r.token) pm.environment.set('carol_token', r.token);",
+                  "if (r.user && r.user.id) pm.environment.set('carol_id', r.user.id);"
                 ]
               }
             }
@@ -264,7 +416,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Тестов Тест Тестович\",\"school\":\"Школа №99\",\"grade\":\"9А\",\"nickname\":\"testuser1\"}"
+              "raw": "{\"fullName\":\"{{new_user_fullName}}\",\"school\":\"{{new_user_school}}\",\"grade\":\"9А\",\"nickname\":\"{{new_user_nickname}}\"}"
             }
           },
           "event": [
@@ -280,8 +432,9 @@
                   "pm.test('R-01 token issued', () => pm.expect(r.token).to.be.a('string'));",
                   "pm.test('R-01 cred is 0', () => pm.expect(Number(r.user.cred)).to.equal(0));",
                   "pm.test('R-01 phoneVerified false', () => pm.expect(r.user.phoneVerified).to.be.false);",
-                  "if (r.user) pm.collectionVariables.set('new_user_id', r.user.id);",
-                  "if (r.token) pm.collectionVariables.set('reg_token', r.token);"
+                  "if (r.user) pm.environment.set('new_user_id', r.user.id);",
+                  "if (r.token) pm.environment.set('reg_token', r.token);",
+                  "if (r.ok && r.user && String(r.user.nickname).startsWith(String(pm.variables.get('fcom_fixture_prefix')) + '_')) pm.environment.set('new_user_id_fixture_prefix', pm.variables.get('fcom_fixture_prefix'));"
                 ]
               }
             }
@@ -300,7 +453,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Звонков Зинаида Зиновьевна\",\"school\":\"Школа №88\",\"grade\":\"10Б\",\"nickname\":\"zvonkova\",\"phone\":\"{{new_phone}}\"}"
+              "raw": "{\"fullName\":\"{{phone_user_fullName}}\",\"school\":\"{{phone_user_school}}\",\"grade\":\"10Б\",\"nickname\":\"{{phone_user_nickname}}\",\"phone\":\"{{new_phone}}\"}"
             }
           },
           "event": [
@@ -314,7 +467,9 @@
                   "pm.test('R-02 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
                   "pm.test('R-02 _devOtp is 6 digits', () => pm.expect(r._devOtp).to.match(/^\\d{6}$/));",
                   "pm.test('R-02 phoneVerified false initially', () => pm.expect(r.user.phoneVerified).to.be.false);",
-                  "if (r._devOtp) pm.collectionVariables.set('dev_otp', r._devOtp);"
+                  "if (r._devOtp) pm.environment.set('dev_otp', r._devOtp);",
+                  "if (r.user && r.user.id) pm.environment.set('phone_user_id', r.user.id);",
+                  "if (r.ok && r.user && String(r.user.nickname).startsWith(String(pm.variables.get('fcom_fixture_prefix')) + '_')) pm.environment.set('phone_user_id_fixture_prefix', pm.variables.get('fcom_fixture_prefix'));"
                 ]
               }
             }
@@ -333,7 +488,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Первый Пользователь Новой Школы\",\"school\":\"Уникальная Школа №777\",\"grade\":\"11А\",\"nickname\":\"firstschool777\"}"
+              "raw": "{\"fullName\":\"{{first_user_fullName}}\",\"school\":\"{{first_user_school}}\",\"grade\":\"11А\",\"nickname\":\"{{first_user_nickname}}\"}"
             }
           },
           "event": [
@@ -345,7 +500,8 @@
                   "pm.test('R-03 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('R-03 stays pending', () => pm.expect(r.user.status).to.equal('pending'));",
                   "pm.test('R-03 cred = 0', () => pm.expect(Number(r.user.cred)).to.equal(0));",
-                  "if (r.user && r.user.id) pm.collectionVariables.set('first_school_user_id', r.user.id);"
+                  "if (r.user && r.user.id) pm.environment.set('first_school_user_id', r.user.id);",
+                  "if (r.ok && r.user && String(r.user.nickname).startsWith(String(pm.variables.get('fcom_fixture_prefix')) + '_')) pm.environment.set('first_school_user_id_fixture_prefix', pm.variables.get('fcom_fixture_prefix'));"
                 ]
               }
             }
@@ -364,7 +520,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"school\":\"Школа\",\"grade\":\"9А\",\"nickname\":\"noname\"}"
+              "raw": "{\"school\":\"{{validation_school}}\",\"grade\":\"9А\",\"nickname\":\"{{validation_nickname}}\"}"
             }
           },
           "event": [
@@ -394,7 +550,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Тест Тестов\",\"grade\":\"9А\",\"nickname\":\"noschool\"}"
+              "raw": "{\"fullName\":\"{{validation_fullName}}\",\"grade\":\"9А\",\"nickname\":\"{{validation_nickname}}\"}"
             }
           },
           "event": [
@@ -422,7 +578,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"nickname\":\"nograde\"}"
+              "raw": "{\"fullName\":\"{{validation_fullName}}\",\"school\":\"{{validation_school}}\",\"nickname\":\"{{validation_nickname}}\"}"
             }
           },
           "event": [
@@ -450,7 +606,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Тест Тестов\",\"school\":\"Школа\",\"grade\":\"9А\"}"
+              "raw": "{\"fullName\":\"{{validation_fullName}}\",\"school\":\"{{validation_school}}\",\"grade\":\"9А\"}"
             }
           },
           "event": [
@@ -478,7 +634,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"alice\"}"
+              "raw": "{\"fullName\":\"{{duplicate_alice_fullName}}\",\"school\":\"{{validation_school}}\",\"grade\":\"9А\",\"nickname\":\"{{alice_nickname}}\"}"
             }
           },
           "event": [
@@ -506,7 +662,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Другой Алиса\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"ALICE\"}"
+              "raw": "{\"fullName\":\"{{duplicate_alice_fullName}}\",\"school\":\"{{validation_school}}\",\"grade\":\"9А\",\"nickname\":\"{{alice_nickname_upper}}\"}"
             }
           },
           "event": [
@@ -534,7 +690,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Другой Борис\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"notbob\",\"phone\":\"+79001000002\"}"
+              "raw": "{\"fullName\":\"{{duplicate_bob_fullName}}\",\"school\":\"{{validation_school}}\",\"grade\":\"9А\",\"nickname\":\"{{duplicate_bob_nickname}}\",\"phone\":\"{{bob_phone}}\"}"
             }
           },
           "event": [
@@ -562,7 +718,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"иванова алиса сергеевна\",\"school\":\"Школа №1\",\"grade\":\"9А\",\"nickname\":\"aliceclone\"}"
+              "raw": "{\"fullName\":\"{{alice_fullName_lower}}\",\"school\":\"{{validation_school}}\",\"grade\":\"9А\",\"nickname\":\"{{clone_nickname}}\"}"
             }
           },
           "event": [
@@ -618,7 +774,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Postman Reject Target {{$timestamp}}\",\"school\":\"{{admin_school}}\",\"grade\":\"9A\",\"nickname\":\"reject{{$timestamp}}\"}"
+              "raw": "{\"fullName\":\"{{reject_user_fullName}}\",\"school\":\"{{admin_school}}\",\"grade\":\"9A\",\"nickname\":\"{{reject_user_nickname}}\"}"
             }
           },
           "event": [
@@ -630,7 +786,8 @@
                   "pm.test('R-12 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('R-12 status pending', () => pm.expect(r.user.status).to.equal('pending'));",
                   "pm.test('R-12 role member', () => pm.expect(r.user.role).to.equal('member'));",
-                  "if (r.user && r.user.id) pm.collectionVariables.set('reject_user_id', r.user.id);"
+                  "if (r.user && r.user.id) pm.environment.set('reject_user_id', r.user.id);",
+                  "if (r.ok && r.user && String(r.user.nickname).startsWith(String(pm.variables.get('fcom_fixture_prefix')) + '_')) pm.environment.set('reject_user_id_fixture_prefix', pm.variables.get('fcom_fixture_prefix'));"
                 ]
               }
             }
@@ -713,7 +870,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"phone\":\"+79001000004\",\"code\":\"999999\"}"
+              "raw": "{\"phone\":\"{{dave_phone}}\",\"code\":\"999999\"}"
             }
           },
           "event": [
@@ -746,7 +903,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"phone\":\"+70000000000\",\"code\":\"123456\"}"
+              "raw": "{\"phone\":\"{{unknown_phone}}\",\"code\":\"123456\"}"
             }
           },
           "event": [
@@ -775,7 +932,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"phone\":\"+79001000004\"}"
+              "raw": "{\"phone\":\"{{dave_phone}}\"}"
             }
           },
           "event": [
@@ -804,7 +961,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"phone\":\"+70000000000\"}"
+              "raw": "{\"phone\":\"{{unknown_phone}}\"}"
             }
           },
           "event": [
@@ -936,7 +1093,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"alice\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{alice_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -948,12 +1105,13 @@
                   "pm.test('L-01 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('L-01 token string', () => pm.expect(r.token).to.be.a('string'));",
                   "pm.test('L-01 user has id', () => pm.expect(r.user.id).to.be.a('string'));",
-                  "pm.test('L-01 user has nickname', () => pm.expect(r.user.nickname).to.equal('alice'));",
+                  "pm.test('L-01 user has nickname', () => pm.expect(r.user.nickname).to.equal(pm.variables.get('alice_nickname')));",
                   "pm.test('L-01 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
-                  "pm.test('L-01 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
-                  "if (r.token) pm.collectionVariables.set('alice_token', r.token);",
-                  "if (r.user && r.user.role === 'admin' && r.token) pm.collectionVariables.set('admin_token', r.token);",
-                  "if (r.user && r.user.school) pm.collectionVariables.set('admin_school', r.user.school);"
+                  "if (r.token) pm.environment.set('alice_token', r.token);",
+                  "if (r.user && r.user.role === 'admin' && r.token) pm.environment.set('admin_token', r.token);",
+                  "if (r.user && r.user.school) pm.environment.set('admin_school', r.user.school);",
+                  "pm.test('Own login profile phone is nullable string', () => pm.expect(r.user.phone === null || typeof r.user.phone === 'string').to.be.true);",
+                  "pm.test('Own login profile phoneVerified is boolean', () => pm.expect(r.user.phoneVerified).to.be.a('boolean'));"
                 ]
               }
             }
@@ -972,7 +1130,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"alice\",\"password\":\"wrongpassword\"}"
+              "raw": "{\"nickname\":\"{{alice_nickname}}\",\"password\":\"wrongpassword\"}"
             }
           },
           "event": [
@@ -1001,7 +1159,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"nobody\",\"password\":\"test\"}"
+              "raw": "{\"nickname\":\"{{unknown_nickname}}\",\"password\":\"test\"}"
             }
           },
           "event": [
@@ -1029,7 +1187,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"dave\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{dave_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -1058,7 +1216,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"eve\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{eve_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -1087,7 +1245,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"carol\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{carol_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -1098,7 +1256,7 @@
                   "const r = pm.response.json();",
                   "pm.test('L-06 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('L-06 token issued', () => pm.expect(r.token).to.be.a('string'));",
-                  "if (r.token) pm.collectionVariables.set('logout_token', r.token);"
+                  "if (r.token) pm.environment.set('logout_token', r.token);"
                 ]
               }
             }
@@ -1152,7 +1310,8 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('L-08 revoked token rejected', () => pm.expect(r.ok).to.be.false);",
-                  "pm.test('L-08 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                  "pm.test('L-08 HTTP 401', () => pm.expect(pm.response.code).to.equal(401));",
+                  "pm.test('L-08 session_revoked', () => pm.expect(r.error).to.equal('session_revoked'));"
                 ]
               }
             }
@@ -1183,7 +1342,17 @@
                   "const r = pm.response.json();",
                   "pm.test('A-00 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('A-00 approved admin', () => pm.expect(r.user.role).to.equal('admin'));",
-                  "pm.test('A-00 canApprove true', () => pm.expect(r.canApprove).to.be.true);"
+                  "pm.test('A-00 canApprove true', () => pm.expect(r.canApprove).to.be.true);",
+                  "function assertCredo(user) {",
+                  "  pm.expect(user.cred).to.be.a('number');",
+                  "  pm.expect(user.credLevel).to.be.an('object');",
+                  "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(user.credLevel.min).to.be.a('number');",
+                  "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+                  "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+                  "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+                  "}",
+                  "pm.test('Me has server Credo fields', () => assertCredo(r.user));"
                 ]
               }
             }
@@ -1243,7 +1412,50 @@
                   "const r = pm.response.json();",
                   "pm.test('A-02 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('A-02 pending is array', () => pm.expect(r.pending).to.be.an('array'));",
-                  "pm.test('A-02 pending users have pending status', () => r.pending.forEach((u) => pm.expect(u.status).to.equal('pending')));"
+                  "pm.test('A-02 pending users have pending status', () => r.pending.forEach((u) => pm.expect(u.status).to.equal('pending')));",
+                  "function assertCredo(user) {",
+                  "  pm.expect(user.cred).to.be.a('number');",
+                  "  pm.expect(user.credLevel).to.be.an('object');",
+                  "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(user.credLevel.min).to.be.a('number');",
+                  "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+                  "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+                  "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+                  "}",
+                  "pm.test('Directory HTTP 200 and arrays', () => {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  pm.expect(r.ok).to.be.true;",
+                  "  ['users','pending','usersToRate'].forEach(key => pm.expect(r[key]).to.be.an('array'));",
+                  "});",
+                  "pm.test('Directory approved entries have server Credo and eligibility', () => {",
+                  "  r.users.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.status).to.equal('approved');",
+                  "    pm.expect(user.phone).to.be.undefined;",
+                  "    pm.expect(user.canRate).to.be.an('object');",
+                  "    pm.expect(user.canRate.ok).to.be.a('boolean');",
+                  "    if (user.canRate.ok) pm.expect(user.canRate.reason).to.be.undefined;",
+                  "    else pm.expect(['no_chat','24h_limit']).to.include(user.canRate.reason);",
+                  "  });",
+                  "});",
+                  "pm.test('Directory pending entries have server Credo and no eligibility', () => {",
+                  "  r.pending.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.status).to.equal('pending');",
+                  "    pm.expect(user.phone).to.be.undefined;",
+                  "    pm.expect(user.canRate).to.be.undefined;",
+                  "  });",
+                  "});",
+                  "pm.test('usersToRate equals eligible users in this response', () => {",
+                  "  const eligible = r.users.filter(user => user.canRate.ok).map(user => user.id).sort();",
+                  "  pm.expect(r.usersToRate.map(user => user.id).sort()).to.deep.equal(eligible);",
+                  "  r.usersToRate.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.canRate.ok).to.be.true;",
+                  "    const listed = r.users.find(candidate => candidate.id === user.id);",
+                  "    pm.expect(user).to.deep.equal(listed);",
+                  "  });",
+                  "});"
                 ]
               }
             }
@@ -1328,7 +1540,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"userId\":\"00000000-0000-0000-0000-999999999999\"}"
+              "raw": "{\"userId\":\"{{missing_user_id}}\"}"
             }
           },
           "event": [
@@ -1395,7 +1607,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"userId\":\"{{reject_user_id}}\",\"deviceFingerprint\":\"aabbcc112233445566778899aabbccddeeff0011\"}"
+              "raw": "{\"userId\":\"{{reject_user_id}}\",\"deviceFingerprint\":\"{{reject_fingerprint}}\"}"
             }
           },
           "variable": [
@@ -1449,10 +1661,12 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('M-01 ok', () => pm.expect(r.ok).to.be.true);",
-                  "pm.test('M-01 message.fromId is alice', () => pm.expect(r.message.fromId).to.equal(pm.collectionVariables.get('alice_id')));",
-                  "pm.test('M-01 message.toId is bob', () => pm.expect(r.message.toId).to.equal(pm.collectionVariables.get('bob_id')));",
+                  "pm.test('M-01 message.fromId is alice', () => pm.expect(r.message.fromId).to.equal(pm.variables.get('alice_id')));",
+                  "pm.test('M-01 message.toId is bob', () => pm.expect(r.message.toId).to.equal(pm.variables.get('bob_id')));",
                   "pm.test('M-01 readAt is null', () => pm.expect(r.message.readAt).to.be.null);",
-                  "pm.test('M-01 no fromId spoofing', () => pm.expect(r.message.fromId).not.to.equal(pm.collectionVariables.get('bob_id')));"
+                  "pm.test('M-01 no fromId spoofing', () => pm.expect(r.message.fromId).not.to.equal(pm.variables.get('bob_id')));",
+                  "pm.test('Message senderDeleted is false for current sender', () => pm.expect(r.message.senderDeleted).to.equal(false));",
+                  "pm.test('Message hides internal deletedFromId', () => pm.expect(r.message.deletedFromId).to.be.undefined);"
                 ]
               }
             }
@@ -1462,15 +1676,7 @@
           "name": "M-02 Get messages alice↔bob",
           "request": {
             "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/messages?partnerId={{bob_id}}",
-              "query": [
-                {
-                  "key": "partnerId",
-                  "value": "{{bob_id}}"
-                }
-              ]
-            },
+            "url": "{{base_url}}/messages?partnerId={{bob_id}}",
             "header": [
               {
                 "key": "Authorization",
@@ -1489,8 +1695,8 @@
                   "pm.test('M-02 messages not empty', () => pm.expect(r.messages.length).to.be.above(0));",
                   "pm.test('M-02 each message has fromId/toId', () => {",
                   "  r.messages.forEach(m => {",
-                  "    const aliceId = pm.collectionVariables.get('alice_id');",
-                  "    const bobId = pm.collectionVariables.get('bob_id');",
+                  "    const aliceId = pm.variables.get('alice_id');",
+                  "    const bobId = pm.variables.get('bob_id');",
                   "    pm.expect([m.fromId, m.toId]).to.include(aliceId);",
                   "    pm.expect([m.fromId, m.toId]).to.include(bobId);",
                   "  });",
@@ -1500,7 +1706,12 @@
                   "  for (let i = 1; i < msgs.length; i++) {",
                   "    pm.expect(new Date(msgs[i].time) >= new Date(msgs[i-1].time)).to.be.true;",
                   "  }",
-                  "});"
+                  "});",
+                  "pm.test('Every message has compatible sender metadata', () => r.messages.forEach(message => {",
+                  "  pm.expect(message.fromId).to.be.a('string');",
+                  "  pm.expect(message.senderDeleted).to.be.a('boolean');",
+                  "  pm.expect(message.deletedFromId).to.be.undefined;",
+                  "}));"
                 ]
               }
             }
@@ -1605,6 +1816,142 @@
       "name": "7. Credo Rating",
       "item": [
         {
+          "name": "C-00 Directory includes server Credo and usersToRate",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "function assertCredo(user) {",
+                  "  pm.expect(user.cred).to.be.a('number');",
+                  "  pm.expect(user.credLevel).to.be.an('object');",
+                  "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(user.credLevel.min).to.be.a('number');",
+                  "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+                  "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+                  "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+                  "}",
+                  "pm.test('Directory HTTP 200 and arrays', () => {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  pm.expect(r.ok).to.be.true;",
+                  "  ['users','pending','usersToRate'].forEach(key => pm.expect(r[key]).to.be.an('array'));",
+                  "});",
+                  "pm.test('Directory approved entries have server Credo and eligibility', () => {",
+                  "  r.users.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.status).to.equal('approved');",
+                  "    pm.expect(user.phone).to.be.undefined;",
+                  "    pm.expect(user.canRate).to.be.an('object');",
+                  "    pm.expect(user.canRate.ok).to.be.a('boolean');",
+                  "    if (user.canRate.ok) pm.expect(user.canRate.reason).to.be.undefined;",
+                  "    else pm.expect(['no_chat','24h_limit']).to.include(user.canRate.reason);",
+                  "  });",
+                  "});",
+                  "pm.test('Directory pending entries have server Credo and no eligibility', () => {",
+                  "  r.pending.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.status).to.equal('pending');",
+                  "    pm.expect(user.phone).to.be.undefined;",
+                  "    pm.expect(user.canRate).to.be.undefined;",
+                  "  });",
+                  "});",
+                  "pm.test('usersToRate equals eligible users in this response', () => {",
+                  "  const eligible = r.users.filter(user => user.canRate.ok).map(user => user.id).sort();",
+                  "  pm.expect(r.usersToRate.map(user => user.id).sort()).to.deep.equal(eligible);",
+                  "  r.usersToRate.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.canRate.ok).to.be.true;",
+                  "    const listed = r.users.find(candidate => candidate.id === user.id);",
+                  "    pm.expect(user).to.deep.equal(listed);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C-00b Rate-target filter matches usersToRate",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users?rateTargets=true",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "function assertCredo(user) {",
+                  "  pm.expect(user.cred).to.be.a('number');",
+                  "  pm.expect(user.credLevel).to.be.an('object');",
+                  "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(user.credLevel.min).to.be.a('number');",
+                  "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+                  "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+                  "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+                  "}",
+                  "pm.test('Directory HTTP 200 and arrays', () => {",
+                  "  pm.expect(pm.response.code).to.equal(200);",
+                  "  pm.expect(r.ok).to.be.true;",
+                  "  ['users','pending','usersToRate'].forEach(key => pm.expect(r[key]).to.be.an('array'));",
+                  "});",
+                  "pm.test('Directory approved entries have server Credo and eligibility', () => {",
+                  "  r.users.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.status).to.equal('approved');",
+                  "    pm.expect(user.phone).to.be.undefined;",
+                  "    pm.expect(user.canRate).to.be.an('object');",
+                  "    pm.expect(user.canRate.ok).to.be.a('boolean');",
+                  "    if (user.canRate.ok) pm.expect(user.canRate.reason).to.be.undefined;",
+                  "    else pm.expect(['no_chat','24h_limit']).to.include(user.canRate.reason);",
+                  "  });",
+                  "});",
+                  "pm.test('Directory pending entries have server Credo and no eligibility', () => {",
+                  "  r.pending.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.status).to.equal('pending');",
+                  "    pm.expect(user.phone).to.be.undefined;",
+                  "    pm.expect(user.canRate).to.be.undefined;",
+                  "  });",
+                  "});",
+                  "pm.test('usersToRate equals eligible users in this response', () => {",
+                  "  const eligible = r.users.filter(user => user.canRate.ok).map(user => user.id).sort();",
+                  "  pm.expect(r.usersToRate.map(user => user.id).sort()).to.deep.equal(eligible);",
+                  "  r.usersToRate.forEach(user => {",
+                  "    assertCredo(user);",
+                  "    pm.expect(user.canRate.ok).to.be.true;",
+                  "    const listed = r.users.find(candidate => candidate.id === user.id);",
+                  "    pm.expect(user).to.deep.equal(listed);",
+                  "  });",
+                  "});",
+                  "pm.test('rateTargets=true only returns eligible approved users', () => r.users.forEach(user => pm.expect(user.canRate.ok).to.be.true));",
+                  "pm.test('rateTargets=true users equal usersToRate', () => pm.expect(r.users).to.deep.equal(r.usersToRate));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "C-01 Rate alice→bob score 4 (has conversation)",
           "request": {
             "method": "POST",
@@ -1636,7 +1983,17 @@
                   "if (r.ok) {",
                   "  pm.test('C-01 newCred is number', () => pm.expect(r.newCred).to.be.a('number'));",
                   "  pm.test('C-01 entry.score is 4', () => pm.expect(r.entry.score).to.equal(4));",
-                  "}"
+                  "}",
+                  "function assertCredo(user) {",
+                  "  pm.expect(user.cred).to.be.a('number');",
+                  "  pm.expect(user.credLevel).to.be.an('object');",
+                  "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(user.credLevel.min).to.be.a('number');",
+                  "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+                  "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+                  "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+                  "}",
+                  "if (r.ok) pm.test('Rate returns updated server Credo fields', () => assertCredo({ ...r, cred: r.newCred }));"
                 ]
               }
             }
@@ -1862,9 +2219,9 @@
                   "pm.test('G-01 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-01 groups array', () => pm.expect(r.groups).to.be.an('array'));",
                   "pm.test('G-01 invites array', () => pm.expect(r.invites).to.be.an('array'));",
-                  "const publicGroup = r.groups.find((g) => g.type === 'school_public');",
+                  "const schoolKey = value => String(value).normalize('NFKC').replace(/\\s+/g, ' ').trim().toLowerCase(); const publicGroup = r.groups.find(g => g.type === 'school_public' && schoolKey(g.school) === schoolKey(pm.variables.get('admin_school')));",
                   "pm.test('G-01 has school-public group', () => pm.expect(publicGroup).to.exist);",
-                  "if (publicGroup) pm.collectionVariables.set('school_public_group_id', publicGroup.id);",
+                  "if (publicGroup) pm.environment.set('school_public_group_id', publicGroup.id);",
                   "pm.test('G-01 group members are embedded when present', () => {",
                   "  r.groups.forEach((g) => pm.expect(g.members).to.be.an('array'));",
                   "});"
@@ -1890,7 +2247,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"action\":\"create\",\"name\":\"Postman Group {{$timestamp}}\",\"memberIds\":[\"{{bob_id}}\",\"{{carol_id}}\"]}"
+              "raw": "{\"action\":\"create\",\"name\":\"{{group_fixture_name}}\",\"memberIds\":[\"{{bob_id}}\",\"{{carol_id}}\"]}"
             }
           },
           "event": [
@@ -1901,11 +2258,12 @@
                   "const r = pm.response.json();",
                   "pm.test('G-02 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-02 private group', () => pm.expect(r.group.type).to.equal('private'));",
-                  "pm.test('G-02 created by alice', () => pm.expect(r.group.createdBy).to.equal(pm.collectionVariables.get('alice_id')));",
+                  "pm.test('G-02 created by alice', () => pm.expect(r.group.createdBy).to.equal(pm.variables.get('alice_id')));",
                   "if (r.group) {",
-                  "  pm.collectionVariables.set('group_id', r.group.id);",
-                  "  pm.collectionVariables.set('group_name', r.group.name);",
-                  "} "
+                  "  pm.environment.set('group_id', r.group.id);",
+                  "  pm.environment.set('group_name', r.group.name);",
+                  "} ",
+                  "if (r.ok && r.group && r.group.createdBy === pm.variables.get('alice_id') && r.group.name === pm.variables.replaceIn(pm.variables.get('group_fixture_name'))) pm.environment.set('group_fixture_verified', r.group.id);"
                 ]
               }
             }
@@ -1929,7 +2287,7 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const groupId = pm.variables.get('group_id');",
                   "const group = r.groups.find((g) => g.id === groupId);",
                   "pm.test('G-03 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-03 group visible to creator', () => pm.expect(group).to.exist);",
@@ -1958,11 +2316,11 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const groupId = pm.variables.get('group_id');",
                   "const invite = r.invites.find((item) => item.group && item.group.id === groupId);",
                   "pm.test('G-04 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-04 invite visible to bob', () => pm.expect(invite).to.exist);",
-                  "if (invite) pm.collectionVariables.set('bob_invite_id', invite.id);"
+                  "if (invite) pm.environment.set('bob_invite_id', invite.id);"
                 ]
               }
             }
@@ -2019,7 +2377,7 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const groupId = pm.variables.get('group_id');",
                   "const group = r.groups.find((g) => g.id === groupId);",
                   "pm.test('G-06 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-06 group visible to accepted member', () => pm.expect(group).to.exist);",
@@ -2048,11 +2406,11 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const groupId = pm.variables.get('group_id');",
                   "const invite = r.invites.find((item) => item.group && item.group.id === groupId);",
                   "pm.test('G-07 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-07 invite visible to carol', () => pm.expect(invite).to.exist);",
-                  "if (invite) pm.collectionVariables.set('carol_invite_id', invite.id);"
+                  "if (invite) pm.environment.set('carol_invite_id', invite.id);"
                 ]
               }
             }
@@ -2109,7 +2467,7 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const groupId = pm.collectionVariables.get('group_id');",
+                  "const groupId = pm.variables.get('group_id');",
                   "pm.test('G-09 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-09 private group not visible after decline', () => pm.expect(r.groups.some((g) => g.id === groupId)).to.be.false);",
                   "pm.test('G-09 invite no longer pending', () => pm.expect(r.invites.some((item) => item.group && item.group.id === groupId)).to.be.false);"
@@ -2145,8 +2503,10 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('G-10 ok', () => pm.expect(r.ok).to.be.true);",
-                  "pm.test('G-10 message groupId', () => pm.expect(r.message.groupId).to.equal(pm.collectionVariables.get('group_id')));",
-                  "if (r.message && r.message.id) pm.collectionVariables.set('group_message_id', r.message.id);"
+                  "pm.test('G-10 message groupId', () => pm.expect(r.message.groupId).to.equal(pm.variables.get('group_id')));",
+                  "if (r.message && r.message.id) pm.environment.set('group_message_id', r.message.id);",
+                  "pm.test('Message senderDeleted is false for current sender', () => pm.expect(r.message.senderDeleted).to.equal(false));",
+                  "pm.test('Message hides internal deletedFromId', () => pm.expect(r.message.deletedFromId).to.be.undefined);"
                 ]
               }
             }
@@ -2170,10 +2530,15 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const messageId = pm.collectionVariables.get('group_message_id');",
+                  "const messageId = pm.variables.get('group_message_id');",
                   "pm.test('G-11 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('G-11 messages array', () => pm.expect(r.messages).to.be.an('array'));",
-                  "pm.test('G-11 group message found', () => pm.expect(r.messages.some((m) => m.id === messageId)).to.be.true);"
+                  "pm.test('G-11 group message found', () => pm.expect(r.messages.some((m) => m.id === messageId)).to.be.true);",
+                  "pm.test('Every message has compatible sender metadata', () => r.messages.forEach(message => {",
+                  "  pm.expect(message.fromId).to.be.a('string');",
+                  "  pm.expect(message.senderDeleted).to.be.a('boolean');",
+                  "  pm.expect(message.deletedFromId).to.be.undefined;",
+                  "}));"
                 ]
               }
             }
@@ -2279,11 +2644,11 @@
                   "pm.test('MU-01 media path', () => pm.expect(r.media.path).to.be.a('string'));",
                   "pm.test('MU-01 media mime image', () => pm.expect(r.media.mime).to.match(/^image\\//));",
                   "if (r.media) {",
-                  "  pm.collectionVariables.set('media_path', r.media.path);",
-                  "  pm.collectionVariables.set('media_mime', r.media.mime);",
-                  "  pm.collectionVariables.set('media_bytes', String(r.media.bytes || 1));",
-                  "  pm.collectionVariables.set('media_width', String(r.media.width || 1));",
-                  "  pm.collectionVariables.set('media_height', String(r.media.height || 1));",
+                  "  pm.environment.set('media_path', r.media.path);",
+                  "  pm.environment.set('media_mime', r.media.mime);",
+                  "  pm.environment.set('media_bytes', String(r.media.bytes || 1));",
+                  "  pm.environment.set('media_width', String(r.media.width || 1));",
+                  "  pm.environment.set('media_height', String(r.media.height || 1));",
                   "} "
                 ]
               }
@@ -2316,10 +2681,12 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "pm.test('MU-02 media_path captured first', () => pm.expect(pm.collectionVariables.get('media_path')).to.be.a('string').and.not.empty);",
+                  "pm.test('MU-02 media_path captured first', () => pm.expect(pm.variables.get('media_path')).to.be.a('string').and.not.empty);",
                   "pm.test('MU-02 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('MU-02 message type image', () => pm.expect(r.message.type).to.equal('image'));",
-                  "pm.test('MU-02 attachment path kept', () => pm.expect(r.message.attachmentPath).to.equal(pm.collectionVariables.get('media_path')));"
+                  "pm.test('MU-02 attachment path kept', () => pm.expect(r.message.attachmentPath).to.equal(pm.variables.get('media_path')));",
+                  "pm.test('Message senderDeleted is false for current sender', () => pm.expect(r.message.senderDeleted).to.equal(false));",
+                  "pm.test('Message hides internal deletedFromId', () => pm.expect(r.message.deletedFromId).to.be.undefined);"
                 ]
               }
             }
@@ -2343,11 +2710,16 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const mediaPath = pm.collectionVariables.get('media_path');",
+                  "const mediaPath = pm.variables.get('media_path');",
                   "const imageMessage = r.messages.find((m) => m.attachmentPath === mediaPath);",
                   "pm.test('MU-03 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('MU-03 image message found', () => pm.expect(imageMessage).to.exist);",
-                  "pm.test('MU-03 signed attachment URL present when storage signs successfully', () => pm.expect(imageMessage.attachmentUrl === null || typeof imageMessage.attachmentUrl === 'string').to.be.true);"
+                  "pm.test('MU-03 signed attachment URL present when storage signs successfully', () => pm.expect(imageMessage.attachmentUrl === null || typeof imageMessage.attachmentUrl === 'string').to.be.true);",
+                  "pm.test('Every message has compatible sender metadata', () => r.messages.forEach(message => {",
+                  "  pm.expect(message.fromId).to.be.a('string');",
+                  "  pm.expect(message.senderDeleted).to.be.a('boolean');",
+                  "  pm.expect(message.deletedFromId).to.be.undefined;",
+                  "}));"
                 ]
               }
             }
@@ -2451,8 +2823,9 @@
                   "const r = pm.response.json();",
                   "pm.test('SB-01 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('SB-01 report open', () => pm.expect(r.report.status).to.equal('open'));",
-                  "pm.test('SB-01 reporter is bob', () => pm.expect(r.report.reporterId).to.equal(pm.collectionVariables.get('bob_id')));",
-                  "if (r.report) pm.collectionVariables.set('report_id', r.report.id);"
+                  "pm.test('SB-01 reporter is bob', () => pm.expect(r.report.reporterId).to.equal(pm.variables.get('bob_id')));",
+                  "if (r.report) pm.environment.set('report_id', r.report.id);",
+                  "if (r.ok && r.report && r.report.reporterId === pm.variables.get('bob_id') && r.report.targetId === pm.variables.get('alice_id')) pm.environment.set('report_fixture_verified', r.report.id);"
                 ]
               }
             }
@@ -2502,7 +2875,7 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "const reportId = pm.collectionVariables.get('report_id');",
+                  "const reportId = pm.variables.get('report_id');",
                   "pm.test('SB-03 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('SB-03 reports array', () => pm.expect(r.reports).to.be.an('array'));",
                   "pm.test('SB-03 includes captured report', () => pm.expect(r.reports.some((report) => report.id === reportId)).to.be.true);"
@@ -2571,7 +2944,7 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('SB-05 ok', () => pm.expect(r.ok).to.be.true);",
-                  "pm.test('SB-05 block captured', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.collectionVariables.get('alice_id'))).to.be.true);"
+                  "pm.test('SB-05 block captured', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.variables.get('alice_id'))).to.be.true);"
                 ]
               }
             }
@@ -2596,7 +2969,7 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('SB-06 ok', () => pm.expect(r.ok).to.be.true);",
-                  "pm.test('SB-06 has alice block', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.collectionVariables.get('alice_id'))).to.be.true);"
+                  "pm.test('SB-06 has alice block', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.variables.get('alice_id'))).to.be.true);"
                 ]
               }
             }
@@ -2663,7 +3036,42 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('SB-08 ok', () => pm.expect(r.ok).to.be.true);",
-                  "pm.test('SB-08 alice removed', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.collectionVariables.get('alice_id'))).to.be.false);"
+                  "pm.test('SB-08 alice removed', () => pm.expect(r.blocks.some((block) => block.blockedId === pm.variables.get('alice_id'))).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SB-09 Unblock rejected fixture is idempotent",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/block-user",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "description": "Uses the rejected local/disposable-staging Eve fixture. Unblock must remain possible after the target is rejected.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"targetId\":\"{{eve_id}}\",\"action\":\"unblock\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('SB-09 HTTP 200 and ok', () => { pm.expect(pm.response.code).to.equal(200); pm.expect(r.ok).to.be.true; });",
+                  "pm.test('SB-09 only outgoing block removed', () => { pm.expect(r.action).to.equal('unblock'); pm.expect(r.targetId).to.equal(pm.variables.get('eve_id')); pm.expect(r.blocks.some(block => block.blockedId === r.targetId)).to.be.false; });"
                 ]
               }
             }
@@ -2695,7 +3103,17 @@
                   "const r = pm.response.json();",
                   "pm.test('AD-00 ok', () => pm.expect(r.ok).to.be.true);",
                   "pm.test('AD-00 approved admin', () => pm.expect(r.user.role).to.equal('admin'));",
-                  "pm.test('AD-00 canApprove true', () => pm.expect(r.canApprove).to.be.true);"
+                  "pm.test('AD-00 canApprove true', () => pm.expect(r.canApprove).to.be.true);",
+                  "function assertCredo(user) {",
+                  "  pm.expect(user.cred).to.be.a('number');",
+                  "  pm.expect(user.credLevel).to.be.an('object');",
+                  "  pm.expect(user.credLevel.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(user.credLevel.min).to.be.a('number');",
+                  "  pm.expect(user.credLevel.max === null || typeof user.credLevel.max === 'number').to.be.true;",
+                  "  pm.expect(['novice','known','trusted','own']).to.include(user.credLevel.css);",
+                  "  pm.expect(user.credProgress).to.be.a('number').and.within(0, 1);",
+                  "}",
+                  "pm.test('Me has server Credo fields', () => assertCredo(r.user));"
                 ]
               }
             }
@@ -2890,7 +3308,7 @@
                   "const anonKey = pm.variables.get('supabase_anon_key');",
                   "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
                   "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
-                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('group_id captured', () => pm.expect(pm.variables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
                   "pm.test('GT-03 anon UPDATE group_members denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
                   "pm.test('GT-03 anon UPDATE group_members is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
                 ]
@@ -2935,7 +3353,7 @@
           ]
         },
         {
-          "name": "GT-05 authenticated cannot SELECT group_members",
+          "name": "GT-05 Fcom JWT (gateway check) cannot SELECT group_members",
           "request": {
             "method": "GET",
             "url": "{{supabase_url}}/rest/v1/group_members?select=*&limit=1",
@@ -2948,7 +3366,8 @@
                 "key": "Authorization",
                 "value": "Bearer {{alice_token}}"
               }
-            ]
+            ],
+            "description": "This request uses the custom Fcom JWT, not a Supabase authenticated-role token. A non-2xx result verifies gateway rejection only. Run tests/sql/group_table_security_checks.sql on the target project to prove authenticated-role ACL/RLS restrictions."
           },
           "event": [
             {
@@ -2967,7 +3386,7 @@
           ]
         },
         {
-          "name": "GT-06 authenticated cannot INSERT group_invites",
+          "name": "GT-06 Fcom JWT (gateway check) cannot INSERT group_invites",
           "request": {
             "method": "POST",
             "url": "{{supabase_url}}/rest/v1/group_invites",
@@ -2988,7 +3407,8 @@
             "body": {
               "mode": "raw",
               "raw": "{\"groupId\":\"{{group_id}}\",\"invitedUserId\":\"{{carol_id}}\",\"invitedBy\":\"{{alice_id}}\",\"status\":\"pending\"}"
-            }
+            },
+            "description": "This request uses the custom Fcom JWT, not a Supabase authenticated-role token. A non-2xx result verifies gateway rejection only. Run tests/sql/group_table_security_checks.sql on the target project to prove authenticated-role ACL/RLS restrictions."
           },
           "event": [
             {
@@ -2999,7 +3419,7 @@
                   "const anonKey = pm.variables.get('supabase_anon_key');",
                   "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
                   "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
-                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('group_id captured', () => pm.expect(pm.variables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
                   "pm.test('GT-06 authenticated INSERT group_invites denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
                   "pm.test('GT-06 authenticated INSERT group_invites is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
                 ]
@@ -3008,7 +3428,7 @@
           ]
         },
         {
-          "name": "GT-07 authenticated cannot UPDATE chat_groups",
+          "name": "GT-07 Fcom JWT (gateway check) cannot UPDATE chat_groups",
           "request": {
             "method": "PATCH",
             "url": "{{supabase_url}}/rest/v1/chat_groups?id=eq.{{group_id}}",
@@ -3029,7 +3449,8 @@
             "body": {
               "mode": "raw",
               "raw": "{\"name\":\"forbidden authenticated patch\"}"
-            }
+            },
+            "description": "This request uses the custom Fcom JWT, not a Supabase authenticated-role token. A non-2xx result verifies gateway rejection only. Run tests/sql/group_table_security_checks.sql on the target project to prove authenticated-role ACL/RLS restrictions."
           },
           "event": [
             {
@@ -3040,7 +3461,7 @@
                   "const anonKey = pm.variables.get('supabase_anon_key');",
                   "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
                   "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
-                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('group_id captured', () => pm.expect(pm.variables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
                   "pm.test('GT-07 authenticated UPDATE chat_groups denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
                   "pm.test('GT-07 authenticated UPDATE chat_groups is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
                 ]
@@ -3049,7 +3470,7 @@
           ]
         },
         {
-          "name": "GT-08 authenticated cannot DELETE chat_groups",
+          "name": "GT-08 Fcom JWT (gateway check) cannot DELETE chat_groups",
           "request": {
             "method": "DELETE",
             "url": "{{supabase_url}}/rest/v1/chat_groups?id=eq.{{group_id}}",
@@ -3066,7 +3487,8 @@
                 "key": "Authorization",
                 "value": "Bearer {{alice_token}}"
               }
-            ]
+            ],
+            "description": "This request uses the custom Fcom JWT, not a Supabase authenticated-role token. A non-2xx result verifies gateway rejection only. Run tests/sql/group_table_security_checks.sql on the target project to prove authenticated-role ACL/RLS restrictions."
           },
           "event": [
             {
@@ -3077,7 +3499,7 @@
                   "const anonKey = pm.variables.get('supabase_anon_key');",
                   "pm.test('supabase_url configured', () => pm.expect(supabaseUrl).to.match(/^https?:\\/\\//));",
                   "pm.test('supabase_anon_key configured', () => pm.expect(String(anonKey || '').length).to.be.above(20));",
-                  "pm.test('group_id captured', () => pm.expect(pm.collectionVariables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('group_id captured', () => pm.expect(pm.variables.get('group_id')).to.match(/^[0-9a-f-]{36}$/));",
                   "pm.test('GT-08 authenticated DELETE chat_groups denied by PostgREST', () => pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]));",
                   "pm.test('GT-08 authenticated DELETE chat_groups is not a successful direct table write/read', () => pm.expect(pm.response.code).to.not.be.within(200, 299));"
                 ]
@@ -3150,7 +3572,7 @@
           ]
         },
         {
-          "name": "GT-11 authenticated cannot SELECT user_blocks",
+          "name": "GT-11 Fcom JWT (gateway check) cannot SELECT user_blocks",
           "request": {
             "method": "GET",
             "url": "{{supabase_url}}/rest/v1/user_blocks?select=*&limit=1",
@@ -3163,7 +3585,8 @@
                 "key": "Authorization",
                 "value": "Bearer {{bob_token}}"
               }
-            ]
+            ],
+            "description": "This request uses the custom Fcom JWT, not a Supabase authenticated-role token. A non-2xx result verifies gateway rejection only. Run tests/sql/group_table_security_checks.sql on the target project to prove authenticated-role ACL/RLS restrictions."
           },
           "event": [
             {
@@ -3178,7 +3601,7 @@
           ]
         },
         {
-          "name": "GT-12 authenticated cannot INSERT user_blocks",
+          "name": "GT-12 Fcom JWT (gateway check) cannot INSERT user_blocks",
           "request": {
             "method": "POST",
             "url": "{{supabase_url}}/rest/v1/user_blocks",
@@ -3199,7 +3622,8 @@
             "body": {
               "mode": "raw",
               "raw": "{\"blockerId\":\"{{bob_id}}\",\"blockedId\":\"{{alice_id}}\"}"
-            }
+            },
+            "description": "This request uses the custom Fcom JWT, not a Supabase authenticated-role token. A non-2xx result verifies gateway rejection only. Run tests/sql/group_table_security_checks.sql on the target project to prove authenticated-role ACL/RLS restrictions."
           },
           "event": [
             {
@@ -3264,7 +3688,7 @@
           ]
         },
         {
-          "name": "S-05 Expired JWT → 401",
+          "name": "S-05 Synthetic outdated JWT/signature fixture is denied",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/users",
@@ -3314,7 +3738,9 @@
               "listen": "prerequest",
               "script": {
                 "exec": [
-                  "pm.collectionVariables.set('revoked_token', pm.collectionVariables.get('alice_token'));"
+                  "(() => {",
+                  "pm.environment.set('revoked_token', pm.variables.get('alice_token'));",
+                  "})();"
                 ]
               }
             }
@@ -3332,12 +3758,6 @@
               }
             ]
           },
-          "variable": [
-            {
-              "key": "revoked_token",
-              "value": ""
-            }
-          ],
           "event": [
             {
               "listen": "test",
@@ -3345,7 +3765,8 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('S-06b revoked token rejected', () => pm.expect(r.ok).to.be.false);",
-                  "pm.test('S-06b HTTP 401', () => pm.expect(pm.response.code).to.equal(401));"
+                  "pm.test('S-06b HTTP 401', () => pm.expect(pm.response.code).to.equal(401));",
+                  "pm.test('S-06b session_revoked', () => pm.expect(r.error).to.equal('session_revoked'));"
                 ]
               }
             }
@@ -3364,7 +3785,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"nickname\":\"bob\",\"password\":\"{{seed_password}}\"}"
+              "raw": "{\"nickname\":\"{{bob_nickname}}\",\"password\":\"{{seed_password}}\"}"
             }
           },
           "event": [
@@ -3374,14 +3795,76 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('S-15 no passwordHash in response', () => pm.expect(r.user.passwordHash).to.be.undefined);",
-                  "pm.test('S-15 no phone in response', () => pm.expect(r.user.phone).to.be.undefined);",
-                  "pm.test('S-15 no phoneVerified in response', () => pm.expect(r.user.phoneVerified).to.be.undefined);"
+                  "pm.test('Own login profile phone is nullable string', () => pm.expect(r.user.phone === null || typeof r.user.phone === 'string').to.be.true);",
+                  "pm.test('Own login profile phoneVerified is boolean', () => pm.expect(r.user.phoneVerified).to.be.a('boolean'));"
                 ]
               }
             }
           ]
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "(() => {",
+          "function abortRequest(message) {",
+          "  pm.request.url.update('http://127.0.0.1:1/fcom-test-blocked');",
+          "  if (pm.execution && typeof pm.execution.skipRequest === 'function') pm.execution.skipRequest();",
+          "  throw new Error(message);",
+          "}",
+          "const mode = pm.variables.get('test_environment');",
+          "const base = String(pm.variables.get('base_url') || '');",
+          "const productionRun = mode === 'isolated-production-fixtures';",
+          "if (!['local','disposable-staging','isolated-production-fixtures'].includes(mode)) abortRequest('Select local, disposable-staging or explicitly authorized isolated-production-fixtures.');",
+          "const authority = (base.split('://')[1] || '').split('/')[0].toLowerCase();",
+          "const hostname = authority.startsWith('[') ? authority.slice(0, authority.indexOf(']') + 1) : authority.split(':')[0];",
+          "if (mode === 'local' && (!['http','https'].includes(base.split('://')[0]) || !['localhost','127.0.0.1','[::1]'].includes(hostname))) abortRequest('local mode requires a loopback URL.');",
+          "if (mode !== 'local' && !base.startsWith('https://')) abortRequest('Hosted fixture tests require HTTPS.');",
+          "const requestName = pm.info.requestName || '';",
+          "const intentionalBadJwt = pm.request.method === 'GET' && (requestName.startsWith('S-03 ') || requestName.startsWith('S-05 '));",
+          "if (/vzjlhiqvfgrrlfdgyebx/i.test(base) && !productionRun) abortRequest('Production requires isolated-production-fixtures and the explicit fixture flag.');",
+          "if (productionRun) {",
+          "  const prefix = pm.variables.get('fcom_fixture_prefix');",
+          "  if (String(pm.variables.get('allow_production_fixtures')) !== 'true' || !/^postman_[a-f0-9]{12}$/.test(prefix || '')) abortRequest('Production tests require allow_production_fixtures=true and a newly generated postman_<12hex> prefix.');",
+          "  let ids; try { ids = JSON.parse(pm.variables.get('fixture_user_ids')); } catch { abortRequest('fixture_user_ids must be the generated seven-id allowlist.'); }",
+          "  if (!Array.isArray(ids) || ids.length !== 7 || new Set(ids).size !== 7 || ids.some(id => !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id) || /^00000000-0000-0000-0000-/.test(id))) abortRequest('Production fixture ids must be seven distinct newly generated UUIDs, never seed ids.');",
+          "  ['alice','bob','carol','dave','eve','frank','grace'].forEach(name => { if (!ids.includes(pm.variables.get(name + '_id')) || !String(pm.variables.get(name + '_nickname')).startsWith(prefix + '_')) abortRequest('Every named actor must be an isolated fixture.'); });",
+          "  const actualUrl = pm.variables.replaceIn(String(pm.request.url));",
+          "  if (actualUrl.includes('/rest/v1/') && !String(pm.variables.get('supabase_url')).startsWith('https://')) abortRequest('Production PostgREST checks require the configured HTTPS fixture project.');",
+          "  const captured = ['new_user_id','phone_user_id','first_school_user_id','reject_user_id'].filter(key => pm.variables.get(key + '_fixture_prefix') === prefix).map(key => pm.variables.get(key)).filter(Boolean);",
+          "  const allowed = new Set(ids.concat(captured));",
+          "  if (requestName === 'Login alice') { ['new_user_id','phone_user_id','first_school_user_id','reject_user_id','group_id','group_fixture_verified','report_id','report_fixture_verified','bob_invite_id','carol_invite_id'].forEach(key => { pm.environment.unset(key); pm.environment.unset(key + '_fixture_prefix'); }); }",
+          "  if (['PATCH','DELETE'].includes(pm.request.method) && actualUrl.includes('/rest/v1/')) {",
+          "    const filters = Object.fromEntries((actualUrl.split('?')[1] || '').split('&').map(pair => { const at = pair.indexOf('='); return [decodeURIComponent(pair.slice(0, at)),decodeURIComponent(pair.slice(at + 1))]; }));",
+          "    const groupId = pm.variables.get('group_fixture_verified');",
+          "    if (actualUrl.includes('/rest/v1/chat_groups?') && (!groupId || filters.id !== 'eq.' + groupId)) abortRequest('Direct group mutation must filter exactly the private fixture group id.');",
+          "    if (actualUrl.includes('/rest/v1/group_members?') && (!groupId || filters.groupId !== 'eq.' + groupId || !ids.some(id => filters.userId === 'eq.' + id))) abortRequest('Direct member mutation must filter the private fixture group and a fixture member.');",
+          "    if (actualUrl.includes('/rest/v1/group_invites?') && ![pm.variables.get('bob_invite_id'),pm.variables.get('carol_invite_id')].filter(Boolean).some(id => filters.id === 'eq.' + id)) abortRequest('Direct invite deletion must filter a captured fixture invite.');",
+          "  }",
+          "  const auth = pm.variables.replaceIn(pm.request.headers.get('Authorization') || '');",
+          "  if (auth.startsWith('Bearer ') && !String(pm.request.url).includes('/rest/v1/')) {",
+          "    const jwtBuffer = require('buffer').Buffer; let subject; try { subject = JSON.parse(jwtBuffer.from(auth.slice(7).split('.')[1], 'base64').toString('utf8')).sub; } catch {}",
+          "    if (!intentionalBadJwt && subject && !allowed.has(subject) && subject !== pm.collectionVariables.get('contract_disposable_id')) abortRequest('Bearer actor is outside the isolated fixture allowlist.');",
+          "  }",
+          "  let body; try { body = JSON.parse(pm.variables.replaceIn(pm.request.body && pm.request.body.raw || '{}')); } catch {}",
+          "  if (body && !requestName.startsWith('SC-07 ') && !requestName.startsWith('SC-08 ')) {",
+          "    if (body.groupId && (body.groupId !== pm.variables.get('group_id') || body.groupId !== pm.variables.get('group_fixture_verified'))) abortRequest('Group mutation must target the private group created and verified in this run.');",
+          "    if (body.inviteId && ![pm.variables.get('bob_invite_id'),pm.variables.get('carol_invite_id')].includes(body.inviteId)) abortRequest('Invite mutation must target a captured fixture invite.');",
+          "    if (body.reportId && body.reportId !== pm.variables.get('report_fixture_verified')) abortRequest('Report mutation must target the report created between fixture users.');",
+          "    ['userId','targetId','toId','fromUserId','createdBy','invitedBy','invitedUserId','reporterId','blockerId','blockedId'].forEach(key => { if (body[key] && !allowed.has(body[key]) && body[key] !== pm.variables.get('missing_user_id') && body[key] !== pm.collectionVariables.get('contract_missing_id')) abortRequest('Mutation target is outside the isolated fixture allowlist.'); });",
+          "    if (Array.isArray(body.memberIds) && body.memberIds.some(id => !allowed.has(id))) abortRequest('Group invitees must be fixture users.');",
+          "    if (String(pm.request.url).includes('/register') && !String(pm.request.url).includes('/register-push') && ((body.nickname && !body.nickname.toLowerCase().startsWith(prefix + '_')) || (body.fullName && !body.fullName.toLowerCase().includes(prefix)))) abortRequest('Registration must use the generated fixture namespace.');",
+          "    if (String(pm.request.url).includes('/verify-phone') || String(pm.request.url).includes('/resend-otp')) { const phones = ['new_phone','bob_phone','dave_phone','unknown_phone'].map(key => pm.variables.get(key)); if (!phones.includes(body.phone)) abortRequest('OTP requests must use fixture phone values.'); }",
+          "  }",
+          "}",
+          "})();"
+        ]
+      }
     }
   ]
 }

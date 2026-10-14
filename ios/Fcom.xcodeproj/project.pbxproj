@@ -1,0 +1,305 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+/* Begin PBXBuildFile section */
+		F0000000000000000000000B /* FcomApp.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000001 /* FcomApp.swift */;
+		};
+		F0000000000000000000000C /* ContentView.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000002 /* ContentView.swift */;
+		};
+		F0000000000000000000000D /* SessionStore.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000003 /* SessionStore.swift */;
+		};
+		F0000000000000000000000E /* AppConfiguration.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000004 /* AppConfiguration.swift */;
+		};
+		F0000000000000000000000F /* APIClient.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000005 /* APIClient.swift */;
+		};
+		F00000000000000000000010 /* KeychainTokenStore.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000006 /* KeychainTokenStore.swift */;
+		};
+		F00000000000000000000011 /* Models.swift in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F00000000000000000000007 /* Models.swift */;
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F00000000000000000000001 /* FcomApp.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "FcomApp.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000002 /* ContentView.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "ContentView.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000003 /* SessionStore.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "SessionStore.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000004 /* AppConfiguration.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "AppConfiguration.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000005 /* APIClient.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "APIClient.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000006 /* KeychainTokenStore.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "KeychainTokenStore.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000007 /* Models.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.swift";
+			path = "Models.swift";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000008 /* Info.plist */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "text.plist.xml";
+			path = "Info.plist";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000009 /* App.xcconfig */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "text.xcconfig";
+			path = "App.xcconfig";
+			sourceTree = "<group>";
+		};
+		F0000000000000000000000A /* Fcom.app */ = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.application";
+			includeInIndex = 0;
+			path = "Fcom.app";
+			sourceTree = "BUILT_PRODUCTS_DIR";
+		};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F00000000000000000000017 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		F00000000000000000000012 /* Fcom */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000001 /* FcomApp.swift */,
+				F00000000000000000000002 /* ContentView.swift */,
+				F00000000000000000000003 /* SessionStore.swift */,
+				F00000000000000000000004 /* AppConfiguration.swift */,
+				F00000000000000000000005 /* APIClient.swift */,
+				F00000000000000000000006 /* KeychainTokenStore.swift */,
+				F00000000000000000000007 /* Models.swift */,
+				F00000000000000000000008 /* Info.plist */,
+			);
+			path = "Fcom";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000013 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000009 /* App.xcconfig */,
+			);
+			path = "Config";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000014 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000000A /* Fcom.app */,
+			);
+			name = "Products";
+			sourceTree = "<group>";
+		};
+		F00000000000000000000015 /* Main Group */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000012 /* Fcom */,
+				F00000000000000000000013 /* Config */,
+				F00000000000000000000014 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F0000000000000000000001F /* Fcom */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F0000000000000000000001E /* Build configuration list for PBXNativeTarget Fcom */;
+			buildPhases = (
+				F00000000000000000000016 /* Sources */,
+				F00000000000000000000017 /* Frameworks */,
+				F00000000000000000000018 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = "Fcom";
+			productName = "Fcom";
+			productReference = F0000000000000000000000A /* Fcom.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F00000000000000000000020 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = "1500";
+				LastSwiftUpdateCheck = "1500";
+				TargetAttributes = {
+					F0000000000000000000001F = {
+						CreatedOnToolsVersion = "15.0";
+						ProvisioningStyle = "Automatic";
+					};
+				};
+			};
+			buildConfigurationList = F0000000000000000000001D /* Build configuration list for PBXProject Fcom */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "ru";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"ru",
+				"en",
+				"Base",
+			);
+			mainGroup = F00000000000000000000015 /* Main Group */;
+			productRefGroup = F00000000000000000000014 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F0000000000000000000001F /* Fcom */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F00000000000000000000018 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F00000000000000000000016 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F0000000000000000000000B /* FcomApp.swift in Sources */,
+				F0000000000000000000000C /* ContentView.swift in Sources */,
+				F0000000000000000000000D /* SessionStore.swift in Sources */,
+				F0000000000000000000000E /* AppConfiguration.swift in Sources */,
+				F0000000000000000000000F /* APIClient.swift in Sources */,
+				F00000000000000000000010 /* KeychainTokenStore.swift in Sources */,
+				F00000000000000000000011 /* Models.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F00000000000000000000019 /* Debug project */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = "YES";
+				ENABLE_STRICT_OBJC_MSGSEND = "YES";
+				SDKROOT = "iphoneos";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				DEBUG_INFORMATION_FORMAT = "dwarf";
+			};
+			name = "Debug";
+		};
+		F0000000000000000000001A /* Release project */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = "YES";
+				ENABLE_STRICT_OBJC_MSGSEND = "YES";
+				SDKROOT = "iphoneos";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			};
+			name = "Release";
+		};
+		F0000000000000000000001B /* Debug Fcom */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F00000000000000000000009 /* App.xcconfig */;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+			};
+			name = "Debug";
+		};
+		F0000000000000000000001C /* Release Fcom */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F00000000000000000000009 /* App.xcconfig */;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+			};
+			name = "Release";
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F0000000000000000000001D /* Build configuration list for PBXProject Fcom */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F00000000000000000000019 /* Debug */,
+				F0000000000000000000001A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Release";
+		};
+		F0000000000000000000001E /* Build configuration list for PBXNativeTarget Fcom */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0000000000000000000001B /* Debug */,
+				F0000000000000000000001C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Release";
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F00000000000000000000020 /* Project object */;
+}

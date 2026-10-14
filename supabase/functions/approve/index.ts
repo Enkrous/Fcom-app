@@ -21,11 +21,12 @@
  *   + caller and target must be in the same school
  */
 
-import { ok, err, corsPrelight }     from '../_shared/response.ts';
+import { ok, err, corsPrelight, withErrorHandling }     from '../_shared/response.ts';
 import { getServiceClient }          from '../_shared/db.ts';
 import { requireAuthWithRevocation } from '../_shared/jwt.ts';
+import { queuePushForEvent }         from '../_shared/push.ts';
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withErrorHandling(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPrelight();
   if (req.method !== 'POST') return err('method_not_allowed', 405);
 
@@ -88,5 +89,6 @@ Deno.serve(async (req: Request) => {
   }
 
   const row = rows[0];
+  queuePushForEvent(supabase, { type: 'account_approved', userId: row.user_id });
   return ok({ user: { id: row.user_id, status: row.user_status, cred: Number(row.user_cred) } });
-});
+}));

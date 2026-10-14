@@ -1,8 +1,8 @@
 # Fcom Messenger — Final Developer Handoff Package
 
-**Status:** Implementation completed in the shared workspace. This document is the planning baseline; the repository now contains the Settings, Reports/Blocks, Supabase safety migrations and functions, Waiting-for-Moderation polish, Lottie Splash, onboarding/backfill, account deletion, and related QA/deployment documentation. Supabase functions and migrations still require deployment against the target project, and App Store legal/native deliverables remain external prerequisites.
+**Status (updated 2026-10-15):** The implementation is deployed to Supabase production, including safety migrations, account deletion, Credo and push registration. Live RLS and API checks are complete. This document retains the historical planning baseline below; current results and remaining native/Apple prerequisites are in [backend-release-2026-10-14.md](backend-release-2026-10-14.md).
 
-**Session tooling note:** Figma MCP and Supabase MCP are not connected in the current tool session (only `cursor-app-control` and `cursor-ide-browser` are available). Every conclusion below that would normally cite Figma/Supabase MCP instead cites the underlying source (source code, migrations, or the earlier phases of this engagement where those MCPs *were* available) and is labeled accordingly in the Technical Decisions section. Nothing here was fabricated to fill an MCP gap.
+**Historical tooling note:** The original planning session did not have Figma/Supabase MCP. The October 14–15 backend release used the connected Supabase plugin for production migrations, deployment, SQL checks and advisors. Historical assessments below should be read in their original planning context.
 
 ---
 
@@ -296,7 +296,7 @@
 ☑ Add in-app account deletion (Settings extension)
 ☑ Reconcile App Name and finalize App Store metadata draft
 ☑ Internal static/unit QA across all shipped features together
-☐ Re-verify RLS/grants on all new and modified tables in the live Supabase project
+☑ Re-verify RLS/grants on all new and modified tables in the live Supabase project (2026-10-15: 249 checks, 15 public application tables; see backend-release-2026-10-14.md)
 ☐ Final architecture/security review before submission
 ☐ App Store Connect submission (only after all blockers above are cleared)
 
@@ -318,4 +318,4 @@
 
 ---
 
-The planning baseline has since been implemented in the shared workspace. No commits or branches were created, and no production database changes or deployments were executed from this session. Before release, deploy the reviewed Supabase migrations/functions, run the SQL/Postman regression suite, and complete the external native/legal App Store deliverables.
+The planning baseline has since been implemented. Production migrations/functions and SQL/Postman checks were completed in the October 14–15 backend release; see [the current release report](backend-release-2026-10-14.md). The initial SwiftUI scaffold still needs a Mac/Xcode build, and external native/legal App Store deliverables remain outstanding.
